@@ -17,7 +17,7 @@ password = password_provided.encode()
 salt = os.urandom(16)
 kdf = PBKDF2HMAC(
     algorithm=hashes.SHA256(),
-    length=128,
+    length=32,
     salt=salt,
     iterations=128452,
     backend=default_backend()
@@ -36,7 +36,7 @@ print('[Server started]')
 while True:
 	try:
 		data, addr = socket.recvfrom(1024)
-		if data.deconde('utf-8') == 'KEYREQUEST':
+		if data.decode('utf-8') == '---KEYREQUEST---':
 			socket.sendto(key, addr)
 		if addr not in clients:
 			clients.append(addr)
