@@ -39,7 +39,7 @@ while key_recieved == False:
 		key_recieved = True
 	except Exception as e:
 		time.sleep(.2)
-		print('Not recieved: ', e)
+		print('Recieving session key...')
 		pass
 key = data
 f = Fernet(key)

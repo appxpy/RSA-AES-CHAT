@@ -12,7 +12,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 N = 128
 password_provided = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(N)) # This is input in the form of a string
-print('Current session password is: ', password_provided)
 password = password_provided.encode()
 salt = os.urandom(16)
 kdf = PBKDF2HMAC(
@@ -23,7 +22,6 @@ kdf = PBKDF2HMAC(
     backend=default_backend()
 )
 key = base64.urlsafe_b64encode(kdf.derive(password)) # Can only use kdf once
-print(len(key))
 ############KEYGEN###############
 HOST = '0.0.0.0'
 PORT = 8080
