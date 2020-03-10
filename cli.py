@@ -5,7 +5,21 @@ from cryptography.fernet import Fernet
 
 HOST = socket.gethostbyname(socket.gethostname())
 PORT = 0
-server = ('178.140.207.179', 8080)
+try:
+	file = open('SERVER_IP.txt', 'r').read()
+except:
+	file = open('SERVER_IP.txt', 'w').close()
+	file = open('SERVER_IP.txt', 'r').read()
+
+print('file')
+if file == '':
+	input('Enter global ip of device the server.py is running on. Press enter to exit.')
+	file.close()
+else:
+	print(file)
+	server_ip = str(file)
+	server = (server_ip, 8080)
+	print('Connecting to: ', server)
 
 
 join = False
@@ -50,7 +64,7 @@ alias = str(input('Please, enter your name: '))
 
 while shutdown == False:
 	if join == False:
-		socket.sendto(("["+alias + "] - Joined the chat ").encode("utf-8"),server)
+		socket.sendto(f.encrypt(("["+alias + "] - Joined the chat ").encode("utf-8")),server)
 
 		join = True
 	else:
@@ -63,7 +77,7 @@ while shutdown == False:
 			time.sleep(.5)
 		except Exception as e:
 			print(e)
-			socket.sendto(("["+alias + "] - Left the chat ").encode("utf-8"),server)
+			socket.sendto(f.encrypt(("["+alias + "] - Left the chat ").encode("utf-8")),server)
 			shutdown == True
 			break
 recieveThread.join()
