@@ -1,25 +1,27 @@
-import socket
-import time
-import threading
-from cryptography.fernet import Fernet
+try:
+    import socket
+    import time
+    import threading
+    import sys
+    from cryptography.fernet import Fernet
+except:
+	print('Installing packages!')
+	import subprocess
+	import sys
+	packagelist = ['cryptography']
+	for package in packagelist:
+		subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+finally:
+	import socket
+	import time
+	import threading
+	import sys
+	from cryptography.fernet import Fernet
+
 
 HOST = socket.gethostbyname(socket.gethostname())
 PORT = 0
-try:
-	file = open('SERVER_IP.txt', 'r').read()
-except:
-	file = open('SERVER_IP.txt', 'w').close()
-	file = open('SERVER_IP.txt', 'r').read()
-
-print('file')
-if file == '':
-	input('Enter global ip of device the server.py is running on. Press enter to exit.')
-	file.close()
-else:
-	print(file)
-	server_ip = str(file)
-	server = (server_ip, 8080)
-	print('Connecting to: ', server)
+server = ('192.168.14.55', 8080)
 
 
 join = False
@@ -76,12 +78,12 @@ while shutdown == False:
 
 			time.sleep(.5)
 		except Exception as e:
-			print(e)
 			socket.sendto(f.encrypt(("["+alias + "] - Left the chat ").encode("utf-8")),server)
-			shutdown == True
+			recieveThread.join()
+			socket.close()
+			input('Press enter to exit.')
 			break
-recieveThread.join()
-socket.close()
+sys.exit()
 
 
 
