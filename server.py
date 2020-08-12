@@ -17,11 +17,12 @@ PUBKEY_STR = PUBKEY.save_pkcs1()
 #}
 CLIENTS = {}
 USERS = {
-	'George': '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25'
-#	'George2': '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25'
+	'George': '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25',
+	'George2': '532eaabd9574880dbf76b9b8cc00832c20a6ec113d682299550d7a6e0f345e25'
 }
-
-HOST = '127.0.0.1'
+USERIP = {}
+IPUSER = {}
+HOST = 'localhost'
 PORT = 8760
 
 socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -48,12 +49,23 @@ while True:
 					if USERS[payload['login']] == payload['password']:
 						socket.sendto('---AUTHORIZED SUCCESS---'.encode('utf-8'), addr)
 						CLIENTS[addr] = 'ONLINE'
+						USERIP[payload['login']] = addr
+						IPUSER[addr] = payload['login']
 				else:
 					socket.sendto('---AUTHORIZATION FAILURE---'.encode('utf-8'), addr)
-					CLIENTS[addr] = 'NO AUTH'	
-		else:	
-			print('[{}] [{}:{}] > {}'.format(str(datetime.now()), addr[0], addr[1], rsa.decrypt(data, PRIVATEKEY).decode('utf-8')))
+					CLIENTS[addr] = 'NO AUTH'
+		
+		else:
+			if rsa.decrypt(data, PRIVATEKEY).decode('utf-8') == '---JOIN CHAT---':
+				data = (IPUSER[addr] + ' joined the chat.').encode('utf-8')
+				print(CLIENTS)
+				for client in CLIENTS.keys():
+					if addr != client:
+						socket.sendto(data, client)	
+			else:
+				print('[{}] [{}:{}] > {}'.format(str(datetime.now()), addr[0], addr[1], rsa.decrypt(data, PRIVATEKEY).decode('utf-8')))
 		time.sleep(.5)
+		print(CLIENTS)
 		for client in CLIENTS.keys():
 			if addr != client:
 				socket.sendto(data, client)

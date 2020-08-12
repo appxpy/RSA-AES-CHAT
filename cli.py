@@ -6,16 +6,12 @@ import sys
 import hashlib
 import rsa
 import json
-from requests import get
-from requests import get
-
-ip = get('https://api.ipify.org').text
 
 global KEYS
 KEYS = []
 HOST = socket.gethostbyname("") 
 PORT = 8761
-server = ('127.0.0.1', 8760)
+server = ('localhost', 8760)
 
 
 join = False
@@ -38,7 +34,7 @@ def recieve(name, socket):
 
 				if data == '---HEARTBEAT---':
 					socket.sendto(rsa.encrypt('---HEARTBEAT---'.encode('utf-8'), KEY))
-				if data != '---RSA KEYS REQUEST---':
+				if data != '---RSA KEY REQUEST---':
 					print(data)
 
 		
@@ -49,8 +45,11 @@ def recieve(name, socket):
 socket = socket.socket(socket.AF_INET ,socket.SOCK_DGRAM)
 socket.bind((HOST,PORT))
 socket.setblocking(0)
-
-socket.sendto('---RSA KEY REQUEST---'.encode('utf-8'), server)
+try:
+	socket.sendto('---RSA KEY REQUEST---'.encode('utf-8'), server)
+except:
+	print('Error : Network is unreachable.')
+	sys.exit()
 iteration = 0
 while key_recieved == False:
 	try:
@@ -60,9 +59,10 @@ while key_recieved == False:
 		time.sleep(.5)
 		if iteration == 9:
 			iteration = 0
-		suffix = iteration // 2
+		suffix = str('.') * (iteration // 2)
 		iteration += 1
-		print('Initializing secure connection' + str('.') * suffix, end='\r')
+		sys.stdout.write('Initializing secure connection{}    \r'.format(suffix))
+		sys.stdout.flush()
 		pass
 
 
