@@ -1,0 +1,29 @@
+################################################# KEY EXCHANGE #################################################
+
+Client connects to server
+
+Server accept connection & Send RSA public key
+
+Client recieve key and send client encrypted public key by server public key
+
+Server recieve and decrypt public key & verify signature > Bad signature => Close connection
+
+################################################# KEY EXCHANGE #################################################
+
+Auth codes:
+
+<INVALIDCREDENTIALS> - Login error
+
+<ALREADYONLINE> - User online
+
+<TEMPBLOCKED> - Blocked for 60 sec
+
+<BLOCKED> - Permanently blocked
+
+
+##################################################### AUTH #####################################################
+
+Client send encrypted nickname and hashed password
+
+Server decrypt data and verify signature > Bad signature or invalid credentials => <INVALIDCREDENTIALS> => Close connection
+
