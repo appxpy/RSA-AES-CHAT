@@ -5,7 +5,7 @@ from Cryptodome.Hash import SHA256
 from Cryptodome.PublicKey import RSA
 from Cryptodome.Cipher import PKCS1_OAEP
 from Cryptodome.Cipher import AES
-from Crypto
+from Cryptodome import Random
 
 global DEBUG
 DEBUG = True

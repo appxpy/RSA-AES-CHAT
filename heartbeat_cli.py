@@ -3,12 +3,14 @@ import socket
 import datetime
 import select 
 import sys 
+import json
 from Cryptodome.Signature import PKCS1_v1_5
 from Cryptodome.Hash import SHA256
 from Cryptodome.PublicKey import RSA
 from Cryptodome.Cipher import PKCS1_OAEP
 from Cryptodome.Cipher import AES
 from Cryptodome import Random
+import sys
 global publickeysrv
 publickeysrv = b''
 timedelta = datetime.datetime.now()
@@ -18,6 +20,7 @@ privatekeyclipem = privatekeycli.exportKey('PEM')
 print('[{}] [Main] > RSA keypair generated for {} seconds.'.format(datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
 publickeycli = privatekeycli.publickey()
 publickeyclipem = publickeycli.exportKey('PEM')
+print(str(publickeycli))
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 connected = False
@@ -25,10 +28,13 @@ auth = False
 key = False
 timeout = 60
 
-HOST = '10.0.0.102'
+HOST = '10.0.0.103'
 PORT = 8008
 
-server.connect((HOST, PORT))
+try:
+    server.connect((HOST, PORT))
+except Exception as e:
+    print('[{}] [Main] > Error : Server is unreachable : {}'.format(datetime.datetime.now(), e))
 
 def encrypt(message, publickeysrv):
     payload = []
@@ -119,21 +125,61 @@ while True:
             if key == False:
                 try:
                     publickeysrvpem = socks.recv(2048)
-                    print('Key recieved')
+                    print('[{}] [Main] > Recieved greeting packet from server.'.format(datetime.datetime.now()))
                     server.send(publickeyclipem)
                     publickeysrv = RSA.importKey(publickeysrvpem)
-                    key = True
-                except:
-                    print('[{}] [Main] > Keyexchange fatal error.'.format(datetime.datetime.now()))
+                    print('[{}] [Main] > RSA key exchange completed successefuly.'.format(datetime.datetime.now()))
+                    ####AUTH####
+                    print('[{}] [Main] > Starting authorization algorythm.'.format(datetime.datetime.now()))
+                    login = str(input("Login > "))
+                    password = str(input("Password > "))
+                    password = SHA256.new(password.encode('utf-8')).hexdigest()
+                    payload = {'login': login, 'password': password}
+                    server.send(encrypt((json.dumps(payload)).encode('utf-8') , publickeysrv))
+                    print('[{}] [Main] > Sending encrypted auth credentials to server.'.format(datetime.datetime.now()))
+                    data = socks.recv(8192)
+                    print(data)
+                    print('[{}] [Main] > Recieved server response.'.format(datetime.datetime.now()))
+                    data = decrypt(data, publickeysrv)
+                    data = json.loads(data)
+                    print(data)
+                    if data['status'] == '<INVALIDCREDENTIALS>':
+                        print('[{}] [Main] > Error : Invalid login or password.'.format(datetime.datetime.now()))
+                        server.close()
+                        sys.exit()
+                    elif data['status'] == '<ALREADYONLINE>':
+                        print('[{}] [Main] > Error : User with such nickname already online.'.format(datetime.datetime.now()))
+                        server.close()
+                        sys.exit()
+                    elif data['status'] == '<TEMPBLOCKED>':
+                        left_ban_time = data['timestamp']
+                        print('[{}] [Main] > Error : This account temporary blocked for {} seconds.'.format(datetime.datetime.now(), left_ban_time))
+                        server.close()
+                        sys.exit()
+                    elif data['status'] == '<BLOCKED>':
+                        print('[{}] [Main] > Error : This account blocked.'.format(datetime.datetime.now()))
+                        server.close()
+                        sys.exit()
+                    elif data['status'] == '<SUCCESS>':
+                        print('[{}] [Main] > Authorization succesefull!'.format(datetime.datetime.now()))
+                        for message in data['history'].items():
+                            print(message[1], end='')
+                            key = True
+                except Exception as e:
+                    print('[{}] [Main] > Error : Unexpected error occured during authorization process : {}.'.format(datetime.datetime.now(), e))
                     server.close()
                     sys.exit()
             else:
                 message = socks.recv(2048) 
+                print(message)
                 print(decrypt(message, publickeysrv)) 
         else: 
-            message = sys.stdin.readline() 
-            server.send(encrypt(message.encode('utf-8'), publickeysrv)) 
-            sys.stdout.write("<You> ") 
-            sys.stdout.write(message) 
-            sys.stdout.flush() 
+            message = sys.stdin.readline()
+            if not message.isspace() and not '\r' in message and not '\t' in message: 
+                server.send(encrypt(message.encode('utf-8'), publickeysrv)) 
+                sys.stdout.write("<You> ") 
+                sys.stdout.write(message) 
+                sys.stdout.flush()
+            else:
+                print('\n') 
 server.close() 

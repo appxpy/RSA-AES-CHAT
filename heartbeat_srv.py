@@ -10,8 +10,14 @@ from Cryptodome.Cipher import PKCS1_OAEP
 from Cryptodome.Cipher import AES
 from Cryptodome import Random
 import threading
+import json
+from uuid import uuid4
 from threading import Thread
 import sys
+global CLIENTS_KEYS
+global SHUTDOWN
+global MESSAGES
+global USERS
 
 timedelta = datetime.datetime.now()
 print('[{}] [Server] [Main] > Generating RSA keypair.'.format(datetime.datetime.now()))
@@ -24,21 +30,67 @@ publickeysrvpem = publickeysrv.exportKey('PEM')
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
 
-HOST = '10.0.0.102'
+HOST = '10.0.0.103'
 PORT = 8008
 
 server.bind((HOST, PORT)) 
   
 server.listen(500) 
-  
+
+f = open('users.json', 'r+')
+f1 = open('messages.json', 'r+')
+f2 = open('blocked.json', 'r+')
+
 CLIENTS = []
 THREADS = [] 
 CLIENTS_KEYS = {}
+CLIENTS_TOKENS = {}
+
+
+try:
+    USERS = json.loads(f.read())
+except:
+    f.close()
+    f = open('users.json', 'w')
+    f.write('{}')
+    f.close()
+    USERS = {}
+else:
+    f.close()
+
+try:
+    MESSAGES = json.loads(f1.read())
+except:
+    f1.close()
+    f1 = open('messages.json', 'w')
+    f1.write('{}')
+    f1.close()
+    MESSAGES = {}
+else:
+    f1.close()
+
+try:
+    BLOCKED_LIST = json.loads(f2.read())
+except:
+    f2.close()
+    f2 = open('blocked.json', 'w')
+    f2.write('{}')
+    f2.close()
+    BLOCKED_LIST = {}
+else:
+    f2.close()
+
 
 key = False
 auth = False
+SHUTDOWN = False
+
+def generate_token():
+    rand_token = uuid4()
+    return(rand_token.bytes)
 
 def encrypt(message,publickeycli):
+    print(publickeycli)
     payload = []
     timedelta = datetime.datetime.now()
     print('[{}] [Main] > Generating signature.'.format(datetime.datetime.now()))
@@ -115,7 +167,7 @@ def decrypt(data, publickeycli):
         print('[{}] [Main] > Error : Signature verification failure, your data not secure, please reconnect.'.format(datetime.datetime.now()))
     return message.decode('utf-8')
 
-def clientthread(conn, addr): 
+def clientthread(conn, addr):
     threadName = threading.currentThread().name
     print('[{}] [{}:{}] [{}] > Client TCP listner started.'.format(datetime.datetime.now(), addr[0], addr[1], threadName))
     try:
@@ -123,44 +175,106 @@ def clientthread(conn, addr):
         print('[{}] [{}:{}] [{}] > Sended public RSA key, waiting for client response.'.format(datetime.datetime.now(), addr[0], addr[1], threadName))
         publickeyclipem = conn.recv(2048)
         publickeycli = RSA.importKey(publickeyclipem)
-        CLIENTS_KEYS[addr[0]] = publickeycli
+        CLIENTS_KEYS[conn] = [publickeycli, generate_token()]
         print('[{}] [{}:{}] [{}] > Client & Server public key keyexchanging successful.'.format(datetime.datetime.now(), addr[0], addr[1], threadName))
+        data = conn.recv(2048)
+        data = json.loads(decrypt(data, publickeycli))
+        if addr[0] in BLOCKED_LIST:
+            if BLOCKED_LIST[addr[0]] != 'Inf':
+                if (datetime.datetime.now() - BLOCKED_LIST[addr[0]]).total_seconds() < 60:
+                    timestamp = 60 - (datetime.datetime.now() - BLOCKED_LIST[addr[0]]).total_seconds()
+                    payload = encrypt((json.dumps({
+                        'status': '<TEMPBLOCKED>',
+                        'timestamp': str(round(timestamp,1)),
+                        'history': {
+                            'None': 'Temporary blocked.'
+                        }
+                    })).encode('utf-8'), publickeycli)
+                    conn.send(payload)
+            else:
+                payload = encrypt((json.dumps({
+                    'status': '<TEMPBLOCKED>',
+                    'timestamp': 'Infinity',
+                    'history': {
+                        'None': 'Permanently blocked.'
+                    }
+                })).encode('utf-8'), publickeycli)
+                conn.send(payload)
+        if data['login'] in USERS.keys():
+            if USERS[data['login']] == data['password']:
+                payload = (json.dumps({'status': '<SUCCESS>', 'history': MESSAGES})).encode('utf-8')
+                print('flag5')
+                conn.send(encrypt(payload, publickeycli))
+                message = ('---< {} joined the chat >---'.format(addr[0])).encode('utf-8')
+                broadcast(message , conn)
+            else:
+                BLOCKED_LIST[addr[0]] = datetime.datetime.now()
+                conn.send(encrypt(json.dumps({'status' : '<INVALIDCREDENTIALS>', 'history': {'None': 'Invalid credentials.'}}).encode('utf-8'), publickeycli))
+                remove(CLIENTS_KEYS[conn])
+                print('[{}] [{}:{}] [{}] > Error : Invalid credentials.'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
+                remove(conn)
+                print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                THREADS.remove(threading.currentThread())
+                sys.exit()
+        else:
+            BLOCKED_LIST[addr[0]] = datetime.datetime.now()
+            conn.send(encrypt(json.dumps({'status' : '<INVALIDCREDENTIALS>', 'history': {'None': 'Invalid credentials.'}}).encode('utf-8'), publickeycli))
+            remove(CLIENTS_KEYS[conn])
+            print('[{}] [{}:{}] [{}] > Error : Invalid credentials'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
+            remove(conn)
+            print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+            THREADS.remove(threading.currentThread())
+            sys.exit()
     except Exception as e:
+        remove(CLIENTS_KEYS[conn])
         print('[{}] [{}:{}] [{}] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
         remove(conn)
         print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-        THREADS.remove(threading.currentThread()) 
+        THREADS.remove(threading.currentThread())
         sys.exit()
-
-    while True: 
-            try:
-                message = conn.recv(2048)
-                
-                if message != b'': 
-                    message = decrypt(message, publickeycli)
-                    print('[{}] [{}:{}] [{}] > {}.'.format(datetime.datetime.now(), addr[0], addr[1], threadName, message))
-                    message_to_send = encrypt(("< {} > {}".format(addr[0], message)).encode('utf-8'), publickeycli)
-                    broadcast(message_to_send, conn) 
-                else:
-                    print('[{}] [{}:{}] [{}] > Recieved null-byte, closing connection.'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-                    remove(conn)
-                    THREADS.remove(threading.currentThread()) 
-                    print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-                    sys.exit()
-            except Exception as ex: 
-                print('[{}] [{}:{}] [{}] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
+    while not SHUTDOWN: 
+        try:
+            message = conn.recv(2048)
+            
+            if message != b'': 
+                message = decrypt(message, publickeycli)
+                print('[{}] [{}:{}] [{}] > {}'.format(datetime.datetime.now(), addr[0], addr[1], threadName, message))
+                message_to_send = "< {} > {}".format(addr[0], message).encode('utf-8')
+                MESSAGES[str(datetime.datetime.now())] = message_to_send.decode("utf-8")
+                broadcast(message_to_send, conn) 
+            elif decrypt(message,publickeycli) == '\n':
+                continue
+            else:
+                message = '---< {} left the chat >---'.format(addr[0]).encode('utf-8')
+                broadcast(message , conn)
+                remove(CLIENTS_KEYS[conn])
+                print('[{}] [{}:{}] [{}] > Recieved null-byte, closing connection.'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
                 remove(conn)
-                CLIENTS_KEYS.remove(addr[0])
+                THREADS.remove(threading.currentThread()) 
                 print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-                THREADS.remove(threading.currentThread())
-                break 
-    threading.currentThread().join()
+                sys.exit()
+        except Exception as e: 
+            message = '---< {} left the chat >---'.format(addr[0]).encode('utf-8')
+            broadcast(message , conn)
+            remove(CLIENTS_KEYS[conn])
+            print('[{}] [{}:{}] [{}] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
+            remove(conn)
+            print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+            THREADS.remove(threading.currentThread())
+            break 
+    sys.exit()
 def broadcast(message, connection): 
+    print('flag1')
     for clients in CLIENTS: 
-        if clients!=connection: 
+        print('flag2')
+        if clients != connection: 
+            print('flag3')
             try:
-                print(clients, connection)
-                clients.send(message)   
+                print('flag4')
+                publickeycli = CLIENTS_KEYS[clients][0]
+                print('flag5')
+                print(publickeycli)
+                clients.send(encrypt(message, publickeycli))   
             except Exception as e:
                 print('[{}] [Server] [Broadcast] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), addr[0], addr[1], e)) 
                 clients.close() 
@@ -168,16 +282,91 @@ def broadcast(message, connection):
 def remove(connection): 
     if connection in CLIENTS: 
         CLIENTS.remove(connection) 
-  
-while True: 
+def handshakethread():  
+        while not SHUTDOWN:
+            try: 
+                conn, addr = server.accept() 
+                CLIENTS.append(conn) 
+                print('[{}] [Server] [Main] > Detected connection from {}, starting new threaded TCP listner.'.format(datetime.datetime.now(), addr[0]))
+                thread = Thread(target = clientthread, args = (conn,addr))   
+                THREADS.append(thread)
+                thread.start() 
+            except Exception as e:
+                print('[{}] [Server] [Handshake] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), e))
+                continue
+        sys.exit()
+handshakethread = threading.Thread(target=handshakethread)
+handshakethread.start()
+try:
+    while not SHUTDOWN:
+        cmd = str(input(""))
+        if cmd.lower() == 'stop':
+            print('[{}] [Server] [Main] > Causing fatal errors to stop server activity.'.format(datetime.datetime.now()))
+            SHUTDOWN = True
+            f1 = open('messages.json', 'w', encoding='utf-8')
+            f1.write(json.dumps(MESSAGES, indent=4, ensure_ascii=False))
+            f1.close()
+            f2 = open('blocked.json', 'w', encoding='utf-8')
+            f2.write(json.dumps(BLOCKED_LIST, indent=4, ensure_ascii=False))
+            f2.close()
 
-    conn, addr = server.accept() 
-  
-    CLIENTS.append(conn) 
-    print('[{}] [Server] [Main] > Detected connection from {}, starting new threaded TCP listner.'.format(datetime.datetime.now(), addr[0]))
-    thread = Thread(target = clientthread, args = (conn,addr))   
-    THREADS.append(thread)
-    thread.start() 
-  
-conn.close() 
-server.close() 
+            break
+        elif (cmd.lower()).startswith('broadcast '):
+            data = cmd.split(" ")
+            data.pop(0)
+            data = " ".join(data)
+            data = ("< SERVER > {}".format(data)).encode('utf-8')
+            MESSAGES[str(datetime.datetime.now())] = data.decode('utf-8')
+            for cli in CLIENTS:
+                try:
+                    publickeycli = CLIENTS_KEYS[cli][0]
+                    cli.send(encrypt(data, publickeycli))   
+                except Exception as e:
+                    print('[{}] [Server] [Broadcast] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), addr[0], addr[1], e)) 
+                    cli.close() 
+                    remove(cli) 
+        elif cmd.lower() == 'blocked':
+            print(BLOCKED_LIST)
+        elif cmd.lower() == 'publickeys':
+            print(CLIENTS_KEYS)
+        else:
+            print(MESSAGES)
+    for conn in CLIENTS:
+        conn.close() 
+    server.close()
+except KeyboardInterrupt:
+    f1 = open('messages.json', 'w', encoding='utf-8')
+    f1.write(json.dumps(MESSAGES, indent=4, ensure_ascii=False))
+    f1.close()
+    f2 = open('blocked.json', 'w', encoding='utf-8')
+    f2.write(json.dumps(BLOCKED_LIST, indent=4, ensure_ascii=False))
+    f2.close()
+    for thread in THREADS:
+        thread.join()
+    SHUTDOWN = True
+    for conn in CLIENTS:
+        conn.close() 
+    server.close()
+except Exception as e:
+    print('[{}] [Server] [Main] > Error : unexpected error occured : {}.'.format(datetime.datetime.now(), e))
+    f1 = open('messages.json', 'w', encoding='utf-8')
+    f1.write(json.dumps(MESSAGES, indent=4, ensure_ascii=False))
+    f1.close()
+    f2 = open('blocked.json', 'w', encoding='utf-8')
+    f2.write(json.dumps(BLOCKED_LIST, indent=4, ensure_ascii=False))
+    f2.close()
+    SHUTDOWN = True
+    for conn in CLIENTS:
+        conn.close() 
+    server.close()
+
+
+
+
+
+
+
+
+
+
+

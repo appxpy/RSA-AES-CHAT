@@ -20,6 +20,11 @@ Auth codes:
 
 <BLOCKED> - Permanently blocked
 
+Payload => EncryptByPublicKey(json("{
+	"SessionKey": "None | Key",
+	"Login" : "Login",
+	"Password": "SHA256"
+}"))
 
 ##################################################### AUTH #####################################################
 
@@ -27,3 +32,4 @@ Client send encrypted nickname and hashed password
 
 Server decrypt data and verify signature > Bad signature or invalid credentials => <INVALIDCREDENTIALS> => Close connection
 
+Server respond => Encrypted SessionKey
