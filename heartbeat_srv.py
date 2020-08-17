@@ -30,7 +30,7 @@ publickeysrvpem = publickeysrv.exportKey('PEM')
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
 
-HOST = '10.0.0.103'
+HOST = '10.0.0.101'
 PORT = 8008
 
 server.bind((HOST, PORT)) 
@@ -202,8 +202,9 @@ def clientthread(conn, addr):
                 conn.send(payload)
         if data['login'] in USERS.keys():
             if USERS[data['login']] == data['password']:
+                while sys.getsizeof(MESSAGES) > 4096:
+                    del MESSAGES[list(MESSAGES.keys())[0]]
                 payload = (json.dumps({'status': '<SUCCESS>', 'history': MESSAGES})).encode('utf-8')
-                print('flag5')
                 conn.send(encrypt(payload, publickeycli))
                 message = ('---< {} joined the chat >---'.format(addr[0])).encode('utf-8')
                 broadcast(message , conn)
@@ -264,15 +265,10 @@ def clientthread(conn, addr):
             break 
     sys.exit()
 def broadcast(message, connection): 
-    print('flag1')
     for clients in CLIENTS: 
-        print('flag2')
         if clients != connection: 
-            print('flag3')
             try:
-                print('flag4')
                 publickeycli = CLIENTS_KEYS[clients][0]
-                print('flag5')
                 print(publickeycli)
                 clients.send(encrypt(message, publickeycli))   
             except Exception as e:
@@ -315,6 +311,7 @@ try:
             data = cmd.split(" ")
             data.pop(0)
             data = " ".join(data)
+            data = data + '\n'
             data = ("< SERVER > {}".format(data)).encode('utf-8')
             MESSAGES[str(datetime.datetime.now())] = data.decode('utf-8')
             for cli in CLIENTS:

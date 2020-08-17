@@ -28,7 +28,7 @@ auth = False
 key = False
 timeout = 60
 
-HOST = '10.0.0.103'
+HOST = '10.0.0.101'
 PORT = 8008
 
 try:
