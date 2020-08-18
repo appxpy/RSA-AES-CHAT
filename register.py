@@ -1,7 +1,13 @@
 import json
 import re
+import datetime
 from Cryptodome.Hash import SHA256
 
+# 0 - No additional permissions
+# 1 - Moderator - /whois command and /ban & /kick
+# 2 - Admin - /serverstatus, /connectedcli, /stopserver & advanced /whois
+#
+DEFAULT_ACCESS_LEVEL = 0
 f = open('users.json', 'r+')
 obj = json.load(f, encoding='utf-8')
 f.close()
@@ -18,7 +24,9 @@ if re.match(pattern, login) != None:
 		if password == passwordconf:
 			pattern = re.compile(r'^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[^\w\s]).{8,257}$')
 			if re.match(pattern, password) != None:
-				obj[login] = str((SHA256.new(password.encode('utf-8'))).hexdigest())
+				print('Default access level : {}. You can change it manually for this account in file users.json'.format(DEFAULT_ACCESS_LEVEL))
+				register_time = str(datetime.datetime.now())
+				obj[login] = [str((SHA256.new(password.encode('utf-8'))).hexdigest()), register_time, 'No data', 0, 0]
 				jsonobj = json.dumps(obj, indent=4, sort_keys=True)
 				f = open('users.json', 'w', encoding='utf-8')
 				f.write(jsonobj)

@@ -18,35 +18,43 @@ global CLIENTS_KEYS
 global SHUTDOWN
 global MESSAGES
 global USERS
+global CLIENTS_USERS
+try:
 
-timedelta = datetime.datetime.now()
-print('[{}] [Server] [Main] > Generating RSA keypair.'.format(datetime.datetime.now()))
-privatekeysrv = RSA.generate(2048)
-privatekeysrvpem = privatekeysrv.exportKey('PEM')
-print('[{}] [Server] [Main] > RSA keypair generated for {} seconds.'.format(datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
-publickeysrv = privatekeysrv.publickey()
-publickeysrvpem = publickeysrv.exportKey('PEM')
+    timedelta = datetime.datetime.now()
+    print('[{}] [Server] [Main] > Generating RSA keypair.'.format(datetime.datetime.now()))
+    privatekeysrv = RSA.generate(2048)
+    privatekeysrvpem = privatekeysrv.exportKey('PEM')
+    print('[{}] [Server] [Main] > RSA keypair generated for {} seconds.'.format(datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
+    publickeysrv = privatekeysrv.publickey()
+    publickeysrvpem = publickeysrv.exportKey('PEM')
+    
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
+    
+    HOST = '10.0.0.100'
+    PORT = 8008
+    print('[{}] [Server] [Main] > Binding server to {}:{}.'.format(datetime.datetime.now(), HOST, PORT))
+    server.bind((HOST, PORT)) 
+      
+    server.listen(500) 
+    
+    f = open('users.json', 'r+')
+    f1 = open('messages.json', 'r+')
+    f2 = open('blocked.json', 'r+')
+    
+    CLIENTS = []
+    CLIENTS_USERS = {}
+    THREADS = {}
+    CLIENTS_KEYS = {}
+    CLIENTS_TOKENS = {}
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
-
-HOST = '10.0.0.101'
-PORT = 8008
-
-server.bind((HOST, PORT)) 
-  
-server.listen(500) 
-
-f = open('users.json', 'r+')
-f1 = open('messages.json', 'r+')
-f2 = open('blocked.json', 'r+')
-
-CLIENTS = []
-THREADS = [] 
-CLIENTS_KEYS = {}
-CLIENTS_TOKENS = {}
-
-
+except KeyboardInterrupt:
+    print('\r[{}] [Server] [Main] > Closing...'.format(datetime.datetime.now()))
+    sys.exit()
+except Exception as e:
+    print('[{}] [Server] [Main] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), e)) 
+    sys.exit()
 try:
     USERS = json.loads(f.read())
 except:
@@ -179,59 +187,121 @@ def clientthread(conn, addr):
         print('[{}] [{}:{}] [{}] > Client & Server public key keyexchanging successful.'.format(datetime.datetime.now(), addr[0], addr[1], threadName))
         data = conn.recv(2048)
         data = json.loads(decrypt(data, publickeycli))
-        if addr[0] in BLOCKED_LIST:
-            if BLOCKED_LIST[addr[0]] != 'Inf':
-                if (datetime.datetime.now() - BLOCKED_LIST[addr[0]]).total_seconds() < 60:
-                    timestamp = 60 - (datetime.datetime.now() - BLOCKED_LIST[addr[0]]).total_seconds()
+        login = data['login']
+        if login in list(CLIENTS_USERS):
+            BLOCKED_LIST[addr[0]] = datetime.datetime.now()
+            conn.send(encrypt(json.dumps({'status' : '<ALREADYONLINE>', 'history': {'None': 'This user is already online.'}}).encode('utf-8'), publickeycli))
+            remove(CLIENTS_KEYS[conn])
+            print('[{}] [{}:{}] [{}] > Error : User {} tried to login, while account is online.'.format(datetime.datetime.now(), addr[0], addr[1], threadName, login)) 
+            remove(conn)
+            print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+            del THREADS[threading.currentThread()]
+            sys.exit()
+        else:
+            if addr[0] in BLOCKED_LIST:
+                if BLOCKED_LIST[addr[0]] != 'Inf':
+                    if (datetime.datetime.now() - BLOCKED_LIST[addr[0]]).total_seconds() < 60:
+                        timestamp = 60 - (datetime.datetime.now() - BLOCKED_LIST[addr[0]]).total_seconds()
+                        payload = encrypt((json.dumps({
+                            'status': '<TEMPBLOCKED>',
+                            'timestamp': str(round(timestamp,1)),
+                            'history': {
+                                'None': 'Temporary blocked.'
+                            }
+                        })).encode('utf-8'), publickeycli)
+                        conn.send(payload)
+                        remove(CLIENTS_KEYS[conn])
+                        print('[{}] [{}:{}] [{}] > Error : IP {} temporary blocked'.format(datetime.datetime.now(), addr[0], addr[1], threadName, addr[1])) 
+                        remove(conn)
+                        print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                        del THREADS[threading.currentThread()]
+                        sys.exit()
+                else:
                     payload = encrypt((json.dumps({
-                        'status': '<TEMPBLOCKED>',
-                        'timestamp': str(round(timestamp,1)),
+                        'status': '<BLOCKED>',
+                        'timestamp': 'Infinity',
                         'history': {
-                            'None': 'Temporary blocked.'
+                            'None': 'Permanently blocked.'
                         }
                     })).encode('utf-8'), publickeycli)
                     conn.send(payload)
+                    conn.send(payload)
+                    remove(CLIENTS_KEYS[conn])
+                    print('[{}] [{}:{}] [{}] > Error : IP {} permanently blocked'.format(datetime.datetime.now(), addr[0], addr[1], threadName, addr[1])) 
+                    remove(conn)
+                    print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                    del THREADS[threading.currentThread()]
+                    sys.exit()
+            elif login in BLOCKED_LIST:
+                if BLOCKED_LIST[login] != 'Inf':
+                    if (datetime.datetime.now() - BLOCKED_LIST[login]).total_seconds() < 60:
+                        timestamp = 60 - (datetime.datetime.now() - BLOCKED_LIST[login]).total_seconds()
+                        payload = encrypt((json.dumps({
+                            'status': '<TEMPBLOCKED>',
+                            'timestamp': str(round(timestamp,1)),
+                            'history': {
+                                'None': 'Temporary blocked.'
+                            }
+                        })).encode('utf-8'), publickeycli)
+                        conn.send(payload)
+                        remove(CLIENTS_KEYS[conn])
+                        print('[{}] [{}:{}] [{}] > Error : User {} temporary blocked'.format(datetime.datetime.now(), addr[0], addr[1], threadName, login)) 
+                        remove(conn)
+                        print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                        del THREADS[threading.currentThread()]
+                        sys.exit()
+                else:
+                    payload = encrypt((json.dumps({
+                        'status': '<BLOCKED>',
+                        'timestamp': 'Infinity',
+                        'history': {
+                            'None': 'Permanently blocked.'
+                        }
+                    })).encode('utf-8'), publickeycli)
+                    conn.send(payload)
+                    conn.send(payload)
+                    remove(CLIENTS_KEYS[conn])
+                    print('[{}] [{}:{}] [{}] > Error : User {} permanently blocked'.format(datetime.datetime.now(), addr[0], addr[1], threadName, login)) 
+                    remove(conn)
+                    print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                    del THREADS[threading.currentThread()]
+                    sys.exit()
             else:
-                payload = encrypt((json.dumps({
-                    'status': '<TEMPBLOCKED>',
-                    'timestamp': 'Infinity',
-                    'history': {
-                        'None': 'Permanently blocked.'
-                    }
-                })).encode('utf-8'), publickeycli)
-                conn.send(payload)
-        if data['login'] in USERS.keys():
-            if USERS[data['login']] == data['password']:
-                while sys.getsizeof(MESSAGES) > 4096:
-                    del MESSAGES[list(MESSAGES.keys())[0]]
-                payload = (json.dumps({'status': '<SUCCESS>', 'history': MESSAGES})).encode('utf-8')
-                conn.send(encrypt(payload, publickeycli))
-                message = ('---< {} joined the chat >---'.format(addr[0])).encode('utf-8')
-                broadcast(message , conn)
-            else:
-                BLOCKED_LIST[addr[0]] = datetime.datetime.now()
-                conn.send(encrypt(json.dumps({'status' : '<INVALIDCREDENTIALS>', 'history': {'None': 'Invalid credentials.'}}).encode('utf-8'), publickeycli))
-                remove(CLIENTS_KEYS[conn])
-                print('[{}] [{}:{}] [{}] > Error : Invalid credentials.'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
-                remove(conn)
-                print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-                THREADS.remove(threading.currentThread())
-                sys.exit()
-        else:
-            BLOCKED_LIST[addr[0]] = datetime.datetime.now()
-            conn.send(encrypt(json.dumps({'status' : '<INVALIDCREDENTIALS>', 'history': {'None': 'Invalid credentials.'}}).encode('utf-8'), publickeycli))
-            remove(CLIENTS_KEYS[conn])
-            print('[{}] [{}:{}] [{}] > Error : Invalid credentials'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
-            remove(conn)
-            print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-            THREADS.remove(threading.currentThread())
-            sys.exit()
-    except Exception as e:
+                if login in USERS.keys():
+                    if USERS[data['login']][0] == data['password']:
+                        while sys.getsizeof(MESSAGES) > 4096:
+                            del MESSAGES[list(MESSAGES.keys())[0]]
+                        payload = (json.dumps({'status': '<SUCCESS>', 'history': MESSAGES})).encode('utf-8')
+                        data = encrypt(payload, publickeycli)
+                        print(data)
+                        conn.send(encrypt(payload, publickeycli))
+                        message = ('---< {} joined the chat >---'.format(login)).encode('utf-8')
+                        broadcast(message , conn)
+                        CLIENTS_USERS[login] = [conn, datetime.datetime.now()]
+                    else:
+                        BLOCKED_LIST[addr[0]] = datetime.datetime.now()
+                        conn.send(encrypt(json.dumps({'status' : '<INVALIDCREDENTIALS>', 'history': {'None': 'Invalid credentials.'}}).encode('utf-8'), publickeycli))
+                        remove(CLIENTS_KEYS[conn])
+                        print('[{}] [{}:{}] [{}] > Error : Invalid credentials.'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                        remove(conn)
+                        print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                        del THREADS[threading.currentThread()]
+                        sys.exit()
+                else:
+                    BLOCKED_LIST[addr[0]] = datetime.datetime.now()
+                    conn.send(encrypt(json.dumps({'status' : '<INVALIDCREDENTIALS>', 'history': {'None': 'Invalid credentials.'}}).encode('utf-8'), publickeycli))
+                    remove(CLIENTS_KEYS[conn])
+                    print('[{}] [{}:{}] [{}] > Error : Invalid credentials'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                    remove(conn)
+                    print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
+                    del THREADS[threading.currentThread()]
+                    sys.exit()
+    except Exception as ex:
         remove(CLIENTS_KEYS[conn])
         print('[{}] [{}:{}] [{}] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
         remove(conn)
         print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-        THREADS.remove(threading.currentThread())
+        del THREADS[threading.currentThread()]
         sys.exit()
     while not SHUTDOWN: 
         try:
@@ -239,29 +309,32 @@ def clientthread(conn, addr):
             
             if message != b'': 
                 message = decrypt(message, publickeycli)
-                print('[{}] [{}:{}] [{}] > {}'.format(datetime.datetime.now(), addr[0], addr[1], threadName, message))
-                message_to_send = "< {} > {}".format(addr[0], message).encode('utf-8')
+                print('[{}] [{}:{}] [{}] {} > {}'.format(datetime.datetime.now(), addr[0], addr[1], threadName, login, message))
+                message_to_send = "< {} > {}".format(login, message).encode('utf-8')
                 MESSAGES[str(datetime.datetime.now())] = message_to_send.decode("utf-8")
                 broadcast(message_to_send, conn) 
             elif decrypt(message,publickeycli) == '\n':
                 continue
             else:
-                message = '---< {} left the chat >---'.format(addr[0]).encode('utf-8')
+                del CLIENTS_USERS[login]
+                message = '---< {} left the chat >---'.format(login).encode('utf-8')
                 broadcast(message , conn)
-                remove(CLIENTS_KEYS[conn])
+                del CLIENTS_KEYS[conn]
                 print('[{}] [{}:{}] [{}] > Recieved null-byte, closing connection.'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-                remove(conn)
-                THREADS.remove(threading.currentThread()) 
+                del conn
+                del THREADS[threading.currentThread()] 
                 print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-                sys.exit()
+                break
         except Exception as e: 
-            message = '---< {} left the chat >---'.format(addr[0]).encode('utf-8')
+            del CLIENTS_USERS[login]
+            message = '---< {} left the chat >---'.format(login).encode('utf-8')
             broadcast(message , conn)
-            remove(CLIENTS_KEYS[conn])
+            conn.close()
+            del CLIENTS_KEYS[conn]
             print('[{}] [{}:{}] [{}] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), addr[0], addr[1], threadName, e)) 
-            remove(conn)
+            del conn
             print('[{}] [{}:{}] [{}] > Connection closed, stopping thread activity...'.format(datetime.datetime.now(), addr[0], addr[1], threadName)) 
-            THREADS.remove(threading.currentThread())
+            del THREADS[threading.currentThread()]
             break 
     sys.exit()
 def broadcast(message, connection): 
@@ -285,7 +358,7 @@ def handshakethread():
                 CLIENTS.append(conn) 
                 print('[{}] [Server] [Main] > Detected connection from {}, starting new threaded TCP listner.'.format(datetime.datetime.now(), addr[0]))
                 thread = Thread(target = clientthread, args = (conn,addr))   
-                THREADS.append(thread)
+                THREADS[conn] = thread
                 thread.start() 
             except Exception as e:
                 print('[{}] [Server] [Handshake] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), e))
@@ -319,15 +392,45 @@ try:
                     publickeycli = CLIENTS_KEYS[cli][0]
                     cli.send(encrypt(data, publickeycli))   
                 except Exception as e:
-                    print('[{}] [Server] [Broadcast] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), addr[0], addr[1], e)) 
+                    print('[{}] [Server] [Broadcast] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), e)) 
                     cli.close() 
                     remove(cli) 
         elif cmd.lower() == 'blocked':
-            print(BLOCKED_LIST)
+            print('Blocked IPs:')
+            timestamp = datetime.datetime.now()
+            for item in BLOCKED_LIST.keys():
+                if BLOCKED_LIST[item] != 'Inf':
+                    if timestamp - BLOCKED_LIST[item] > 60:
+                        status = 'ACCOUNT TEMPORARY BLOCKED'
+                    else:
+                        status = 'ACCOUNT UNLOCKED'
+                else:
+                    status = 'PERMANENTLY BLOCKED'
+                print('IP {} : {}', item, status)
+        elif cmd.lower().startswith('ban '):
+            data = cmd.split(" ")
+            if len(data) != 2:
+                print('[{}] [Server] [Main] > Error while parsing command args. Usage : ban <user>'.format(datetime.datetime.now())) 
+            else:
+                data = data[0]
+                if data in USERS.keys():
+                    BLOCKED_LIST[data] = 'Inf'
+                    if data in CLIENTS_USERS.keys():
+                        conn = CLIENTS_USERS[data][0]
+                        print('[{}] [Server] [Main] > User {} is online, closing connection.'.format(datetime.datetime.now(), data))
+                        message = '---< {} left the chat >---'.format(data).encode('utf-8')
+                        broadcast(message , conn)
+                        conn.close()
+                        THREADS[conn].join()
+                        del CLIENTS_USERS[data]
+                        del CLIENTS_KEYS[conn]
+                    print('[{}] [Server] [Main] > User {} succesefully blocked.'.format(datetime.datetime.now(), data))
         elif cmd.lower() == 'publickeys':
             print(CLIENTS_KEYS)
-        else:
-            print(MESSAGES)
+        elif cmd.lower() == 'online':
+            print('Online users:')
+            for item in CLIENTS_USERS.keys():
+                print('User {} since {}'.format(item, CLIENTS_USERS[item][1]))
     for conn in CLIENTS:
         conn.close() 
     server.close()
@@ -338,7 +441,7 @@ except KeyboardInterrupt:
     f2 = open('blocked.json', 'w', encoding='utf-8')
     f2.write(json.dumps(BLOCKED_LIST, indent=4, ensure_ascii=False))
     f2.close()
-    for thread in THREADS:
+    for thread in THREADS.items():
         thread.join()
     SHUTDOWN = True
     for conn in CLIENTS:
