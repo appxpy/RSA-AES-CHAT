@@ -26,7 +26,7 @@ if re.match(pattern, login) != None:
 			if re.match(pattern, password) != None:
 				print('Default access level : {}. You can change it manually for this account in file users.json'.format(DEFAULT_ACCESS_LEVEL))
 				register_time = str(datetime.datetime.now())
-				obj[login] = [str((SHA256.new(password.encode('utf-8'))).hexdigest()), register_time, 'No data', 0, 0]
+				obj[login] = [str((SHA256.new(password.encode('utf-8'))).hexdigest()), register_time, 'No data', 0, 0, 0]
 				jsonobj = json.dumps(obj, indent=4, sort_keys=True)
 				f = open('users.json', 'w', encoding='utf-8')
 				f.write(jsonobj)

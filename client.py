@@ -39,7 +39,7 @@ try:
     key = False
     timeout = 60
     
-    HOST = '10.0.0.100'
+    HOST = '10.0.0.101'
     PORT = 8008
     
     
@@ -139,7 +139,7 @@ def decrypt(data, publickeysrv):
     if verification == True:
         if DEBUG:
             print('[{}] [Main] > Signature succesefully verified.'.format(datetime.datetime.now()))
-            print('[{}] [Main] > Message succesefully decrypted for {} seconds'.format(datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
+            print('[{}] [Main] > Message successefully decrypted for {} seconds'.format(datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
     else:
         print('< SECURITY ALERT >')
         print('[{}] [Main] > Error : Signature verification failure, your data not secure, please reconnect.'.format(datetime.datetime.now()))
@@ -153,13 +153,13 @@ while not SHUTDOWN:
         if socks == server:
             if key == False:
                 try:
-                    publickeysrvpem = socks.recv(2048)
+                    publickeysrvpem = socks.recv(2048) ########## 01 ##########
                     if DEBUG:
                         print('[{}] [Main] > Recieved greeting packet from server.'.format(datetime.datetime.now()))
-                    server.send(publickeyclipem)
+                    server.send(publickeyclipem) ########## 02 ##########
                     publickeysrv = RSA.importKey(publickeysrvpem)
                     if DEBUG:
-                        print('[{}] [Main] > RSA key exchange completed successefuly.'.format(datetime.datetime.now()))
+                        print('[{}] [Main] > RSA key exchange completed successefully.'.format(datetime.datetime.now()))
                     ####AUTH####
                     if DEBUG:
                         print('[{}] [Main] > Starting authorization algorythm.'.format(datetime.datetime.now()))
@@ -167,10 +167,10 @@ while not SHUTDOWN:
                     password = str(input("Password > "))
                     password = SHA256.new(password.encode('utf-8')).hexdigest()
                     payload = {'login': login, 'password': password}
-                    server.send(encrypt((json.dumps(payload)).encode('utf-8') , publickeysrv))
+                    server.send(encrypt((json.dumps(payload)).encode('utf-8') , publickeysrv)) ########## 03 ##########
                     if DEBUG:
                         print('[{}] [Main] > Sending encrypted auth credentials to server.'.format(datetime.datetime.now()))
-                    data = socks.recv(8192)
+                    data = socks.recv(8192) ########## 04 ##########
                     if DEBUG:
                         print('[{}] [Main] > Recieved server response.'.format(datetime.datetime.now()))
                     data = decrypt(data, publickeysrv)
@@ -189,7 +189,7 @@ while not SHUTDOWN:
                         print('[{}] [Main] > Error : This account blocked.'.format(datetime.datetime.now()))
                         SHUTDOWN = True
                     elif data['status'] == '<SUCCESS>':
-                        print('[{}] [Main] > Authorization succesefull!'.format(datetime.datetime.now()))
+                        print('[{}] [Main] > Authorization successeful!'.format(datetime.datetime.now()))
                         for message in data['history'].items():
                             print(message[1], end='')
                             key = True
@@ -201,7 +201,10 @@ while not SHUTDOWN:
                     sys.exit()
             else:
                 message = socks.recv(2048) 
-                print(decrypt(message, publickeysrv)) 
+                if message == b'':
+                    SHUTDOWN = True
+                else:
+                    print(decrypt(message, publickeysrv)) 
         else: 
             message = sys.stdin.readline()
             print(message.lower())
