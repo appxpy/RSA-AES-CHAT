@@ -16,7 +16,7 @@ global SHUTDOWN
     
 SHUTDOWN = False
     
-DEBUG = True
+DEBUG = False
     
 try:    
 
@@ -52,7 +52,6 @@ except Exception as e:
     sys.exit()
 def encrypt(message, publickeysrv):
     global DEBUG
-    print(DEBUG)
     payload = []
     timedelta = datetime.datetime.now()
     if DEBUG:
@@ -192,7 +191,7 @@ while not SHUTDOWN:
                         print('[{}] [Main] > Authorization successeful!'.format(datetime.datetime.now()))
                         for message in data['history'].items():
                             print(message[1], end='')
-                            key = True
+                        key = True
                 except Exception as e:
                     print('[{}] [Main] > Error : Unexpected error occured during authorization process : {}.'.format(datetime.datetime.now(), e))
                     SHUTDOWN = True
@@ -207,18 +206,21 @@ while not SHUTDOWN:
                     print(decrypt(message, publickeysrv)) 
         else: 
             message = sys.stdin.readline()
-            print(message.lower())
             if message.lower() == '/leave\n' or message.lower() == '/stop\n':
                 print('[{}] [Main] > Closing connection...'.format(datetime.datetime.now()))
                 SHUTDOWN = True
                 break
             if message.lower() == '/debug\n':
+
                 if DEBUG == False:
+                    print('[{}] [Main] > Debug messages now ENABLED'.format(datetime.datetime.now()))
                     DEBUG = True
                     continue
                 else:
+                    print('[{}] [Main] > Debug messages now DISABLED'.format(datetime.datetime.now()))
                     DEBUG = False
                     continue
+
             if not message.isspace() and not '\r' in message and not '\t' in message and not message.startswith('/'): 
                 server.send(encrypt(message.encode('utf-8'), publickeysrv)) 
                 sys.stdout.write("<You> ") 

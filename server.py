@@ -161,7 +161,7 @@ class ClientThread(Thread):
 
 				BLOCKED_LIST[self.ip] = str(datetime.datetime.now())
 
-				conn.send(encrypt(json.dumps({'status' : '<ALREADYONLINE>', 'history': {'None': 'This user is already online.'}}).encode('utf-8'), self.publickeycli, self.privatekeysrvpem))
+				self.conn.send(encrypt(json.dumps({'status' : '<ALREADYONLINE>', 'history': {'None': 'This user is already online.'}}).encode('utf-8'), self.publickeycli, self.privatekeysrvpem))
 				
 				print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Error : User {login} tried to login, while account is online.')
 				print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Connection closed, stopping thread activity...')
@@ -174,7 +174,7 @@ class ClientThread(Thread):
 					
 					if self.ip in BLOCKED_LIST:
 						
-						if BLOCKED_LIST[addr[0]] != 'Inf':
+						if BLOCKED_LIST[self.ip] != 'Inf':
 							
 							if (datetime.datetime.now() - datetime.datetime.strptime(BLOCKED_LIST[self.ip], '%Y-%m-%d %H:%M:%S.%f')).total_seconds() < 60:
 								
@@ -264,9 +264,11 @@ class ClientThread(Thread):
 
 					if USERS[data['login']][0] == data['password']:
 
-						while sys.getsizeof(MESSAGES) > 4096:
-							del MESSAGES[list(MESSAGES.keys())[0]]
-
+						for msg in list(MESSAGES.keys()):
+							if sys.getsizeof(MESSAGES) > 2048:
+								del MESSAGES[msg]
+							else:
+								break
 						payload = (json.dumps({'status': '<SUCCESS>', 'history': MESSAGES})).encode('utf-8')
 						data = encrypt(payload, self.publickeycli, self.privatekeysrvpem)
 						self.conn.send(encrypt(payload, self.publickeycli, self.privatekeysrvpem)) ########## 04 ##########
@@ -279,7 +281,7 @@ class ClientThread(Thread):
 
 					else:
 
-						BLOCKED_LIST[addr[0]] = str(datetime.datetime.now())
+						BLOCKED_LIST[self.ip] = str(datetime.datetime.now())
 						self.conn.send(encrypt(json.dumps({'status' : '<INVALIDCREDENTIALS>', 'history': {'None': 'Invalid credentials.'}}).encode('utf-8'), self.publickeycli, self.privatekeysrvpem))
 						
 						del CLIENTS_KEYS[self.conn]
@@ -288,7 +290,7 @@ class ClientThread(Thread):
 						
 				else:
 
-					BLOCKED_LIST[addr[0]] = str(datetime.datetime.now())
+					BLOCKED_LIST[self.ip] = str(datetime.datetime.now())
 					self.conn.send(encrypt(json.dumps({'status' : '<INVALIDCREDENTIALS>', 'history': {'None': 'Invalid credentials.'}}).encode('utf-8'), self.publickeycli, self.privatekeysrvpem))
 					
 					del CLIENTS_KEYS[self.conn]
