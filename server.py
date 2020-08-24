@@ -630,7 +630,7 @@ def main():
 				print('User {} since {}'.format(item, CLIENTS_USERS[item][1]))
 		else:
 
-			print('[{}] [Server] [Console] > Error : No such command. Type "help" to see list of available commands'.format(datetime.datetime.now())) 
+			print('[{}] [Server] [Console] > Error : No such command. Type "help" to see list of available commands.'.format(datetime.datetime.now())) 
 
 
 

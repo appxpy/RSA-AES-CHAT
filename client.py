@@ -34,10 +34,7 @@ try:
     
     print('[{}] [Main] > Connecting to server.'.format(datetime.datetime.now()))
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-    connected = False
-    auth = False
     key = False
-    timeout = 60
     
     HOST = '10.0.0.101'
     PORT = 8008
@@ -190,7 +187,7 @@ while not SHUTDOWN:
                     elif data['status'] == '<SUCCESS>':
                         print('[{}] [Main] > Authorization successeful!'.format(datetime.datetime.now()))
                         for message in data['history'].items():
-                            print(message[1], end='')
+                            print(message[1] + '\n', end='')
                         key = True
                 except Exception as e:
                     print('[{}] [Main] > Error : Unexpected error occured during authorization process : {}.'.format(datetime.datetime.now(), e))
@@ -206,26 +203,30 @@ while not SHUTDOWN:
                     print(decrypt(message, publickeysrv)) 
         else: 
             message = sys.stdin.readline()
-            if message.lower() == '/leave\n' or message.lower() == '/stop\n':
-                print('[{}] [Main] > Closing connection...'.format(datetime.datetime.now()))
-                SHUTDOWN = True
-                break
-            if message.lower() == '/debug\n':
-
-                if DEBUG == False:
-                    print('[{}] [Main] > Debug messages now ENABLED'.format(datetime.datetime.now()))
-                    DEBUG = True
-                    continue
+            message = message.replace('\n', '')
+            if message.startswith('/'):
+                if message.lower() == '/leave' or message.lower() == '/stop':
+                    print('[{}] [Main] > Closing connection...'.format(datetime.datetime.now()))
+                    SHUTDOWN = True
+                    break
+                if message.lower() == '/debug':
+                    if DEBUG == False:
+                        print('[{}] [Main] > Debug messages now ENABLED'.format(datetime.datetime.now()))
+                        DEBUG = True
+                        continue
+                    else:
+                        print('[{}] [Main] > Debug messages now DISABLED'.format(datetime.datetime.now()))
+                        DEBUG = False
+                        continue
                 else:
-                    print('[{}] [Main] > Debug messages now DISABLED'.format(datetime.datetime.now()))
-                    DEBUG = False
-                    continue
-
-            if not message.isspace() and not '\r' in message and not '\t' in message and not message.startswith('/'): 
-                server.send(encrypt(message.encode('utf-8'), publickeysrv)) 
-                sys.stdout.write("<You> ") 
-                sys.stdout.write(message) 
-                sys.stdout.flush()
+                    print('[{}] [Main] > Error : No such command. Type "help" to see list of available commands.'.format(datetime.datetime.now()))
             else:
-                print('\n') 
+
+                if not message.isspace() and not '\r' in message and not '\t' in message and not message == '': 
+                    server.send(encrypt(message.encode('utf-8'), publickeysrv)) 
+                    sys.stdout.write("<You> ") 
+                    sys.stdout.write(message + '\n') 
+                    sys.stdout.flush()
+                else:
+                    print('\n') 
 server.close() 
