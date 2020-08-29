@@ -1,4 +1,4 @@
-function renderUser(list) {
+function renderUser(list) { 
     console.log(list[0]);
     
     let filepath = list[0];

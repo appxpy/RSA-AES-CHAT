@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Auth form</title>
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/meyer-reset/2.0/reset.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900|Material+Icons">
     <style>
-html {
+        html {
   width: 100%;
   height: 100%;
 }
@@ -18,238 +19,55 @@ h1 {
   margin: 80px 0;
 }
 
-.overlay {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.7);
-  transition: opacity 500ms;
-  visibility: hidden;
-  opacity: 0;
+#submitbtn {
+   position: relative;
 }
 
-.overlay:target {
-  visibility: visible;
+button.sending:before {
+   content: '';
+   position: absolute;
+   right: 16px;
+   top: 50%;
+   margin-top: -12px;
+   width: 24px;
+   height: 24px;
+   border: 2px solid;
+   border-left-color: transparent;
+   border-right-color: transparent;
+   border-radius: 50%;
+   transition: opacity 0.5s;
+   animation: 0.8s linear infinite rotate;
+}
+ button.sending {
+   pointer-events: none;
+   cursor: not-allowed;
+}
+
+ @keyframes rotate {
+   0% {
+     transform: rotate(0deg);
+  }
+   100% {
+     transform: rotate(360deg);
+  }
+}
+
+.sucess {
+  margin: auto;
+  display: inline-block;
+  transform: rotate(45deg);
+  height: 22px;
+  width: 12px;
+  border-bottom: 5px solid #fff;
+  border-right: 5px solid #fff;
+  float: right;
   opacity: 1;
+  transition: opacity 1s linear;
+  -webkit-transition: opacity 1s linear;
+  -moz-transition: opacity 1s linear;
+  -o-transition: opacity 1s linear;
 }
-
-.popup {
-  margin: 70px auto;
-  padding: 20px;
-  background: #fff;
-  border-radius: 5px;
-  width: 30%;
-  position: relative;
-  transition: all 5s ease-in-out;
-}
-
-.popup h2 {
-  margin-top: 0;
-  color: #333;
-  font-family: Tahoma, Arial, sans-serif;
-}
-.popup .close {
-  position: absolute;
-  top: 20px;
-  right: 30px;
-  transition: all 200ms;
-  font-size: 30px;
-  font-weight: bold;
-  text-decoration: none;
-  color: #333;
-}
-.popup .close:hover {
-  color: #06D85F;
-}
-.popup .content {
-  max-height: 30%;
-  overflow: auto;
-}
-
-@media screen and (max-width: 700px){
-  .box{
-    width: 70%;
-  }
-  .popup{
-    width: 70%;
-  }
-}
-* {
-    margin: 0;
-    padding: 0;
-}
-
-.svg-box {
-    display:inline-block;
-    position: relative;
-    width:150px;
-}
-
-.green-stroke {
-    stroke:#7CB342;
-}
-
-.red-stroke {
-    stroke: #FF6245;
-}
-
-.yellow-stroke {
-    stroke: #FFC107;
-}
-
-
-.circular circle.path {
-    stroke-dasharray: 330;
-    stroke-dashoffset: 0;
-    stroke-linecap: round;
-    opacity: 0.4;
-    animation: 0.7s draw-circle ease-out;
-    animation-play-state: paused;
-}
-
-/*------- Checkmark ---------*/
-.checkmark{
-  stroke-width: 6.25;
-    stroke-linecap: round;
-  position:absolute;
-    top: 56px;
-    left: 49px;
-    width: 52px;
-    height: 40px;
-}
-
-.checkmark path {
-    animation: 1s draw-check ease-out;
-  animation-play-state: paused;
-}
-
-@keyframes draw-circle {
-    0% {
-        stroke-dasharray: 0,330;
-        stroke-dashoffset: 0;
-        opacity: 1;
-    }
-
-    80% {
-        stroke-dasharray: 330,330;
-        stroke-dashoffset: 0;
-        opacity: 1;
-    }
-
-    100%{
-        opacity: 0.4;
-    }
-}
-
-@keyframes draw-check {
-    0% {
-        stroke-dasharray: 49,80;
-        stroke-dashoffset: 48;
-        opacity: 0;
-    }
-
-    50% {
-        stroke-dasharray: 49,80;
-        stroke-dashoffset: 48;
-        opacity: 1;
-    }
-
-    100% {
-        stroke-dasharray: 130,80;
-        stroke-dashoffset: 48;
-    }
-}
-
-/*---------- Cross ----------*/
-
-.cross {
-    stroke-width:6.25;
-    stroke-linecap: round;
-    position: absolute;
-    top: 54px;
-    left: 54px;
-    width: 40px;
-    height: 40px;
-}
-
-.cross .first-line {
-    animation: 0.7s draw-first-line ease-out;
-}
-
-.cross .second-line {
-    animation: 0.7s draw-second-line ease-out;
-}
-
-@keyframes draw-first-line {
-    0% {
-        stroke-dasharray: 0,56;
-        stroke-dashoffset: 0;
-    }
-
-    50% {
-        stroke-dasharray: 0,56;
-        stroke-dashoffset: 0;
-    }
-
-    100% {
-        stroke-dasharray: 56,330;
-        stroke-dashoffset: 0;
-    }
-}
-
-@keyframes draw-second-line {
-    0% {
-        stroke-dasharray: 0,55;
-        stroke-dashoffset: 1;
-    }
-
-    50% {
-        stroke-dasharray: 0,55;
-        stroke-dashoffset: 1;
-    }
-
-    100% {
-        stroke-dasharray: 55,0;
-        stroke-dashoffset: 70;
-    }
-}
-
-.alert-sign {
-    stroke-width:6.25;
-    stroke-linecap: round;
-    position: absolute;
-    top: 40px;
-    left: 68px;
-    width: 15px;
-    height: 70px;
-    animation: 0.5s alert-sign-bounce cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.alert-sign .dot {
-    stroke:none;
-    fill: #FFC107;
-}
-
-@keyframes alert-sign-bounce {
-    0% {
-        transform: scale(0);
-        opacity: 0;
-    }
-
-    50% {
-        transform: scale(0);
-        opacity: 1;
-    }
-
-    100% {
-        transform: scale(1);
-    }
-}
-
-
-
+ 
 body {
   background: #c5ddeb;
   color: rgba(0, 0, 0, 0.6);
@@ -262,7 +80,7 @@ body {
 
 
 
-.overlay, .form-panel.one:before {
+.form-panel.one:before {
   position: absolute;
   top: 0;
   left: 0;
@@ -283,49 +101,7 @@ body {
    margin: 100px auto 10px;
    overflow: hidden;
 }
-.form-toggle {
-  z-index: 10;
-  position: absolute;
-  top: 60px;
-  right: 60px;
-  background: #FFFFFF;
-  width: 60px;
-  height: 60px;
-  border-radius: 100%;
-  -webkit-transform-origin: center;
-          transform-origin: center;
-  -webkit-transform: translate(0, -25%) scale(0);
-          transform: translate(0, -25%) scale(0);
-  opacity: 0;
-  cursor: pointer;
-  -webkit-transition: all 0.3s ease;
-  transition: all 0.3s ease;
-}
-.form-toggle:before, .form-toggle:after {
-  content: '';
-  display: block;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 30px;
-  height: 4px;
-  background: #4285F4;
-  -webkit-transform: translate(-50%, -50%);
-          transform: translate(-50%, -50%);
-}
-.form-toggle:before {
-  -webkit-transform: translate(-50%, -50%) rotate(45deg);
-          transform: translate(-50%, -50%) rotate(45deg);
-}
-.form-toggle:after {
-  -webkit-transform: translate(-50%, -50%) rotate(-45deg);
-          transform: translate(-50%, -50%) rotate(-45deg);
-}
-.form-toggle.visible {
-  -webkit-transform: translate(0, -25%) scale(1);
-          transform: translate(0, -25%) scale(1);
-  opacity: 1;
-}
+
 .form-group {
   display: -webkit-box;
   display: flex;
@@ -395,6 +171,15 @@ body {
   background: #FFFFFF;
   color: #4285F4;
 }
+
+#submitbtn:disabled {
+  color: rgba(0, 0, 0, 0.6);
+  background: #dddddd;
+  cursor: not-allowed;
+  pointer-events: all !important;
+}
+
+
 .form-group .form-remember {
   font-size: 12px;
   font-weight: 400;
@@ -471,14 +256,14 @@ body {
                 <h1 id='h1'>Account Login</h1>
             </div>
             <div class="form-content">
-                <form>
+                <form class="needs-validation" novalidate>
                     <div class="form-group">
                         <label for="username">Username</label>
-                        <input type="text" id="username" name="username" required="required">
+                        <input type="text" id="username" class="form-control" name="username" required>
                     </div>
                     <div class="form-group">
                         <label for="password">Password</label>
-                        <input type="password" id="password" name="password" required="required">
+                        <input type="password" id="password" name="password" class='form-control' required>
                     </div>
                     <div class="form-group">
                         <label class="form-remember">
@@ -486,62 +271,74 @@ body {
                         </label>
                     </div>
                     <div class="form-group">
-                        <button type="button" href="#popup1" onclick="validate()"  >Log In</button>
+                        <button id="submitbtn" type="button" class="btn btn-outline-primary btn-lg btn-block" onclick="validate()">Log In<div id='sucess'></div></button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
-    <div id="popup1" class="overlay">
-        <div class="popup">
-            <h2>Here i am</h2>
-            <a class="close" href="#">&times;</a>
-            <div class="content">
-                <div class="svg-box">
-                    <svg class="circular red-stroke">
-                        <circle class="path" cx="75" cy="75" r="50" fill="none" stroke-width="5" stroke-miterlimit="10" />
-                    </svg>
-                    <svg class="cross red-stroke">
-                        <g transform="matrix(0.79961,8.65821e-32,8.39584e-32,0.79961,-502.652,-204.518)">
-                            <path class="first-line" d="M634.087,300.805L673.361,261.53" fill="none" />
-                        </g>
-                        <g transform="matrix(-1.28587e-16,-0.79961,0.79961,-1.28587e-16,-204.752,543.031)">
-                            <path class="second-line" d="M634.087,300.805L673.361,261.53" />
-                        </g>
-                    </svg>
-                </div>
-            </div>
-        </div>
-    </div>
+    <script id="error-window-template" type="text/x-handlebars-template"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
     <script type="text/javascript">
-    function validate() {
+    const button = document.getElementById("submitbtn");
+    const username = document.getElementById("username");
+    const password = document.getElementById("password");
 
-        let username = document.getElementById("username").value;
-        let password = document.getElementById("password").value;
-        let filled = true;
-        if (username.trim() == ''){
-          document.getElementById("username").style.borderColor = "red";
-          filled = false;
-        }
-        if (username.trim() == '') {
-          document.getElementById("username").style.borderColor = "red";
-          filled = false;
-        }
-        if (filled) {
-            eel.auth(username, password)(function(callback) {
-                let obj = JSON.parse(callback);
-                if (obj.status == "<SUCESS>") {
-                    window.location.replace("chat.html?data=" + encodeURIComponent(callback))
-                    return true
+
+    function validate() {
+        if (username.value.trim() && password.value.trim()) {
+            button.classList.add("sending");
+            eel.generateKeys()(function(callback) {
+                console.log(callback)
+                if (callback) {
+                    console.log('auth')
+                    eel.auth(username.value, password.value)(function(callback2) {
+                        username.value = '';
+                        password.value = '';
+                        let obj = JSON.parse(callback2);
+                        console.log(obj.status)
+                        console.log(obj)
+                        if (obj.status == '<SUCCESS>') {
+                            button.classList.remove("sending")
+                            document.getElementById('sucess').classList.add(sucess)
+                            console.log('test!')
+                            setTimeout(function() {
+                                window.location.replace("chat.html?data=" + encodeURIComponent(callback2));
+                            }, 1000);
+                        } else {
+                          console.log('err2')
+                            button.classList.remove("sending");
+                        }
+                    });
                 } else {
-                    return false
+                    console.log('err1')
+                    button.classList.remove("sending")
                 }
-            })
+            });
+
         }
     }
     </script>
     <script type="text/javascript" src="/eel.js"></script>
+    <script type="text/javascript">
+    (function() {
+        'use strict';
+        window.addEventListener('load', function() {
+            // Fetch all the forms we want to apply custom Bootstrap validation styles to
+            let forms = document.getElementsByClassName('needs-validation');
+            // Loop over them and prevent submission
+            let validation = Array.prototype.filter.call(forms, function(form) {
+                form.addEventListener('submit', function(event) {
+                    if (form.checkValidity() === false) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    form.classList.add('was-validated');
+                }, false);
+            });
+        }, false);
+    })();
+    </script>
 </body>
 
 </html>

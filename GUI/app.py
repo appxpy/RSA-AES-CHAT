@@ -14,13 +14,18 @@ from Cryptodome.Cipher import PKCS1_OAEP
 from Cryptodome.Cipher import AES
 from Cryptodome import Random
 import sys
+import threading
+
 global DEBUG
 global SHUTDOWN
-
+global publickeycli
+global privatekeysrv
 SHUTDOWN = False
 
 DEBUG = True
 
+publickeycli = b''
+privatekeysrv = b''
 
 HOST = '10.0.0.100'
 PORT = 8008
@@ -28,344 +33,374 @@ PORT = 8008
 eel.init('web')
 
 def stop(server):
-    server.close()
+	server.close()
 
 @eel.expose()
+def generateKeys():
+
+		timedelta = datetime.datetime.now()
+
+		if DEBUG:
+			print('[{}] [Main] > Generating RSA keypair.'.format(
+				datetime.datetime.now()))
+
+		global privatekeycli
+		privatekeycli = RSA.generate(2048)
+
+		privatekeyclipem = privatekeycli.exportKey('PEM')
+
+		if DEBUG:
+			print('[{}] [Main] > RSA keypair generated for {} seconds.'.format(
+				datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
+
+		global publickeycli
+		global publickeyclipem
+		publickeycli = privatekeycli.publickey()
+
+		publickeyclipem = publickeycli.exportKey('PEM')
+		
+		return True
+
+@eel.expose()
+
 def auth(login, password):
 
-    try:
+	try:
 
-        publickeysrv = b''
+		global publickeycli
+		global privatekeycli
+		global publickeyclipem
 
-        timedelta = datetime.datetime.now()
+		print('[{}] [Main] > Connecting to server.'.format(datetime.datetime.now()))
 
-        if DEBUG:
-            print('[{}] [Main] > Generating RSA keypair.'.format(
-                datetime.datetime.now()))
+		global server
+		server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	
+		server.connect((HOST, PORT))
 
-        global privatekeycli
-        privatekeycli = RSA.generate(2048)
+	except KeyboardInterrupt:
 
-        privatekeyclipem = privatekeycli.exportKey('PEM')
+		print('[{}] [Main] > Closing...'.format(datetime.datetime.now()))
 
-        if DEBUG:
-            print('[{}] [Main] > RSA keypair generated for {} seconds.'.format(
-                datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
+		stop(server)
 
-        global publickeycli
-        publickeycli = privatekeycli.publickey()
+		return '{"status": "<KEYBOARDINTERRUPT>"}'
+		#ERR CODE 0001
+	except Exception as e:
 
-        publickeyclipem = publickeycli.exportKey('PEM')
-    
-        print('[{}] [Main] > Connecting to server.'.format(datetime.datetime.now()))
+		print('[{}] [Main] > Error : Server is unreachable : {}'.format(
+			datetime.datetime.now(), e))
 
-        global server
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-        server.connect((HOST, PORT))
+		return '{"status": "<SERVERUNREACHABLE>"}'
 
-    except KeyboardInterrupt:
+	try:
 
-        print('[{}] [Main] > Closing...'.format(datetime.datetime.now()))
+		publickeysrvpem = server.recv(8192)  # 01 ##########
 
-        stop(server)
+		if DEBUG:
 
-        return '{"status": "<KEYBOARDINTERRUPT>"}'
-        #ERR CODE 0001
-    except Exception as e:
+			print('[{}] [Main] > Recieved greeting packet from server.'.format(
+				datetime.datetime.now()))
 
-        print('[{}] [Main] > Error : Server is unreachable : {}'.format(
-            datetime.datetime.now(), e))
+		server.send(publickeyclipem)  # 02 ##########
 
-        return '{"status": "<SERVERUNREACHABLE>"}'
+		publickeysrv = RSA.importKey(publickeysrvpem)
 
-    try:
+		if DEBUG:
+			print('[{}] [Main] > RSA key exchange completed successefully.'.format(
+				datetime.datetime.now()))
+		####AUTH####
 
-        publickeysrvpem = socks.recv(8192)  # 01 ##########
+		if DEBUG:
+			print('[{}] [Main] > Starting authorization algorythm.'.format(
+				datetime.datetime.now()))
 
-        if DEBUG:
+		password = SHA256.new(password.encode('utf-8')).hexdigest()
 
-            print('[{}] [Main] > Recieved greeting packet from server.'.format(
-                datetime.datetime.now()))
+		payload = {'login': login, 'password': password}
 
-        server.send(publickeyclipem)  # 02 ##########
+		server.send(encrypt((json.dumps(payload)).encode(
+			'utf-8'), publickeysrv))  # 03 ##########
 
-        publickeysrv = RSA.importKey(publickeysrvpem)
+		if DEBUG:
 
-        if DEBUG:
-            print('[{}] [Main] > RSA key exchange completed successefully.'.format(
-                datetime.datetime.now()))
-        ####AUTH####
+			print('[{}] [Main] > Sending encrypted auth credentials to server.'.format(
+				datetime.datetime.now()))
 
-        if DEBUG:
-            print('[{}] [Main] > Starting authorization algorythm.'.format(
-                datetime.datetime.now()))
+		data = server.recv(8192)  # 04 ##########
 
-        password = SHA256.new(password.encode('utf-8')).hexdigest()
+		if DEBUG:
 
-        payload = {'login': login, 'password': password}
+			print('[{}] [Main] > Recieved server response.'.format(
+				datetime.datetime.now()))
 
-        server.send(encrypt((json.dumps(payload)).encode(
-            'utf-8'), publickeysrv))  # 03 ##########
+		dataJson = decrypt(data, publickeysrv)
 
-        if DEBUG:
+		data = json.loads(dataJson)
 
-            print('[{}] [Main] > Sending encrypted auth credentials to server.'.format(
-                datetime.datetime.now()))
+		if data['status'] == '<INVALIDCREDENTIALS>':
 
-        data = socks.recv(8192)  # 04 ##########
+			print('[{}] [Main] > Error : Invalid login or password.'.format(
+				datetime.datetime.now()))
 
-        if DEBUG:
+			stop(server)
 
-            print('[{}] [Main] > Recieved server response.'.format(
-                datetime.datetime.now()))
+			return dataJson
 
-        dataJson = decrypt(data, publickeysrv)
+		elif data['status'] == '<ALREADYONLINE>':
 
-        data = json.loads(dataJson)
+			print('[{}] [Main] > Error : User with such nickname already online.'.format(
+				datetime.datetime.now()))
 
-        if data['status'] == '<INVALIDCREDENTIALS>':
+			stop(server)
 
-            print('[{}] [Main] > Error : Invalid login or password.'.format(
-                datetime.datetime.now()))
+			return dataJson
 
-            stop(server)
+		elif data['status'] == '<TEMPBLOCKED>':
 
-            return dataJson
+			left_ban_time = data['timestamp']
 
-        elif data['status'] == '<ALREADYONLINE>':
+			print('[{}] [Main] > Error : This account temporary blocked for {} second(s).'.format(
+				datetime.datetime.now(), left_ban_time))
 
-            print('[{}] [Main] > Error : User with such nickname already online.'.format(
-                datetime.datetime.now()))
+			stop(server)
 
-            stop(server)
+			return dataJson
 
-            return dataJson
+		elif data['status'] == '<BLOCKED>':
 
-        elif data['status'] == '<TEMPBLOCKED>':
+			print('[{}] [Main] > Error : This account blocked.'.format(
+				datetime.datetime.now()))
 
-            left_ban_time = data['timestamp']
+			stop(server)
 
-            print('[{}] [Main] > Error : This account temporary blocked for {} second(s).'.format(
-                datetime.datetime.now(), left_ban_time))
+			return dataJson
 
-            stop(server)
+		elif data['status'] == '<SUCCESS>':
 
-            return dataJson
+			print('[{}] [Main] > Authorization successeful!'.format(
+				datetime.datetime.now()))
+			for message in data['history'].items():
+				print(message[1] + '\n', end='')
 
-        elif data['status'] == '<BLOCKED>':
+			global listnerThread
+			listnerThread = threading.Thread(target=listner, args=(server,))
+			listnerThread.start()
 
-            print('[{}] [Main] > Error : This account blocked.'.format(
-                datetime.datetime.now()))
+			return dataJson
 
-            stop(server)
+			
 
-            return dataJson
+	except Exception as e:
+		print('[{}] [Main] > Error : Unexpected error occured during authorization process : {}.'.format(
+			datetime.datetime.now(), e))
+		
+		stop(server)
 
-        elif data['status'] == '<SUCCESS>':
+		return '{"status": "<EXCEPTION>", "text": "{e}"}'.format(e)
 
-            print('[{}] [Main] > Authorization successeful!'.format(
-                datetime.datetime.now()))
-            for message in data['history'].items():
-                print(message[1] + '\n', end='')
+	except KeyboardInterrupt:
+		print('[{}] [Main] > Closing...'.format(
+			datetime.datetime.now()))
 
-            return dataJson
+		stop(server)
 
-            listner(server)
-
-    except Exception as e:
-        print('[{}] [Main] > Error : Unexpected error occured during authorization process : {}.'.format(
-            datetime.datetime.now(), e))
-        
-        stop(server)
-
-        return dataJson
-
-    except KeyboardInterrupt:
-        print('[{}] [Main] > Closing...'.format(
-            datetime.datetime.now()))
-
-        stop(server)
-
-        return dataJson
+		return '{"status": "<KEYBOARDINTERRUPT>"}'
 
 def encrypt(message, publickeysrv):
-    global DEBUG
-    payload = []
-    timedelta = datetime.datetime.now()
-    if DEBUG:
-        print('[{}] [Main] > Generating signature.'.format(
-            datetime.datetime.now()))
-    ####################################################################################################
-    myhash = SHA256.new(message)
-    signature = PKCS1_v1_5.new(privatekeycli)
-    signature = signature.sign(myhash)
-    if DEBUG:
-        print('[{}] [Main] > Message succesefully signed with signature.'.format(
-            datetime.datetime.now()))
-    # signature encrypt
-    if DEBUG:
-        print('[{}] [Main] > Encrypting signature.'.format(
-            datetime.datetime.now()))
-    cipherrsa = PKCS1_OAEP.new(publickeysrv)
-    sig = cipherrsa.encrypt(signature[:128])
-    sig = sig + cipherrsa.encrypt(signature[128:])
-    payload.append(sig)
-    ####################################################################################################
-    if DEBUG:
-        print('[{}] [Main] > Generating 256 bit session key.'.format(
-            datetime.datetime.now()))
-    # creation 256 bit session key
-    sessionkey = Random.new().read(32)  # 256 bit
-    # encryption AES of the message
-    if DEBUG:
-        print('[{}] [Main] > Encryption AES of the message.'.format(
-            datetime.datetime.now()))
-    iv = Random.new().read(16)  # 128 bit
-    obj = AES.new(sessionkey, AES.MODE_CFB, iv)
-    ciphertext = iv + obj.encrypt(message)  # SEND DATA
-    payload.append(ciphertext)
-    # encryption RSA of the session key
-    if DEBUG:
-        print('[{}] [Main] > Encryption RSA of the session key.'.format(
-            datetime.datetime.now()))
-    cipherrsa = PKCS1_OAEP.new(publickeysrv)
-    sessionkey = cipherrsa.encrypt(sessionkey)  # SEND DATA
-    payload.append(sessionkey)
+	global DEBUG
+	payload = []
+	timedelta = datetime.datetime.now()
+	if DEBUG:
+		print('[{}] [Main] > Generating signature.'.format(
+			datetime.datetime.now()))
+	####################################################################################################
+	myhash = SHA256.new(message)
+	signature = PKCS1_v1_5.new(privatekeycli)
+	signature = signature.sign(myhash)
+	if DEBUG:
+		print('[{}] [Main] > Message succesefully signed with signature.'.format(
+			datetime.datetime.now()))
+	# signature encrypt
+	if DEBUG:
+		print('[{}] [Main] > Encrypting signature.'.format(
+			datetime.datetime.now()))
+	cipherrsa = PKCS1_OAEP.new(publickeysrv)
+	sig = cipherrsa.encrypt(signature[:128])
+	sig = sig + cipherrsa.encrypt(signature[128:])
+	payload.append(sig)
+	####################################################################################################
+	if DEBUG:
+		print('[{}] [Main] > Generating 256 bit session key.'.format(
+			datetime.datetime.now()))
+	# creation 256 bit session key
+	sessionkey = Random.new().read(32)  # 256 bit
+	# encryption AES of the message
+	if DEBUG:
+		print('[{}] [Main] > Encryption AES of the message.'.format(
+			datetime.datetime.now()))
+	iv = Random.new().read(16)  # 128 bit
+	obj = AES.new(sessionkey, AES.MODE_CFB, iv)
+	ciphertext = iv + obj.encrypt(message)  # SEND DATA
+	payload.append(ciphertext)
+	# encryption RSA of the session key
+	if DEBUG:
+		print('[{}] [Main] > Encryption RSA of the session key.'.format(
+			datetime.datetime.now()))
+	cipherrsa = PKCS1_OAEP.new(publickeysrv)
+	sessionkey = cipherrsa.encrypt(sessionkey)  # SEND DATA
+	payload.append(sessionkey)
 
-    payload1 = b'\x00\x01\x01\x00'.join(payload)
-    if DEBUG:
-        print('[{}] [Main] > Message succesefully encrypted for {} seconds.'.format(
-            datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
-    payload_recieved = payload1.split(b'\x00\x01\x01\x00')
-    if payload == payload_recieved and len(payload) == 3:
-        if DEBUG:
-            print('[{}] [Main] > Payload not corrupted.'.format(
-                datetime.datetime.now()))
-        return(payload1)
-    else:
-        print('[{}] [Main] > Error : Message corrupted! Payload parts {}/{}/3'.format(
-            datetime.datetime.now(), len(payload), len(payload_recieved)))
-        return(b'')
+	payload1 = b'\x00\x01\x01\x00'.join(payload)
+	if DEBUG:
+		print('[{}] [Main] > Message succesefully encrypted for {} seconds.'.format(
+			datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
+	payload_recieved = payload1.split(b'\x00\x01\x01\x00')
+	if payload == payload_recieved and len(payload) == 3:
+		if DEBUG:
+			print('[{}] [Main] > Payload not corrupted.'.format(
+				datetime.datetime.now()))
+		return(payload1)
+	else:
+		print('[{}] [Main] > Error : Message corrupted! Payload parts {}/{}/3'.format(
+			datetime.datetime.now(), len(payload), len(payload_recieved)))
+		return(b'')
 
 
 def decrypt(data, publickeysrv):
-    global DEBUG
-    timedelta = datetime.datetime.now()
-    if DEBUG:
-        print('[{}] [Main] > Parsing data.'.format(datetime.datetime.now()))
-    payload = data.split(b'\x00\x01\x01\x00')
-    signature = payload[0]
-    ciphertext = payload[1]
-    sessionkey = payload[2]
-    # decryption session key
-    if DEBUG:
-        print('[{}] [Main] > Decrypting session key.'.format(
-            datetime.datetime.now()))
-    cipherrsa = PKCS1_OAEP.new(privatekeycli)
-    sessionkey = cipherrsa.decrypt(sessionkey)
-    # decryption message
-    if DEBUG:
-        print('[{}] [Main] > Decrypting message.'.format(
-            datetime.datetime.now()))
-    iv = ciphertext[:16]
-    obj = AES.new(sessionkey, AES.MODE_CFB, iv)
-    message = obj.decrypt(ciphertext)
-    message = message[16:]
-    if DEBUG:
-        print('[{}] [Main] > Decrypting signature.'.format(
-            datetime.datetime.now()))
-    # decryption signature
-    ####################################################################################################
-    cipherrsa = PKCS1_OAEP.new(privatekeycli)
-    sig = cipherrsa.decrypt(signature[:256])
-    sig = sig + cipherrsa.decrypt(signature[256:])
-    if DEBUG:
-        print('[{}] [Main] > Signature verification.'.format(
-            datetime.datetime.now()))
-    # signature verification
+	global DEBUG
+	timedelta = datetime.datetime.now()
+	if DEBUG:
+		print('[{}] [Main] > Parsing data.'.format(datetime.datetime.now()))
+	payload = data.split(b'\x00\x01\x01\x00')
+	signature = payload[0]
+	ciphertext = payload[1]
+	sessionkey = payload[2]
+	# decryption session key
+	if DEBUG:
+		print('[{}] [Main] > Decrypting session key.'.format(
+			datetime.datetime.now()))
+	cipherrsa = PKCS1_OAEP.new(privatekeycli)
+	sessionkey = cipherrsa.decrypt(sessionkey)
+	# decryption message
+	if DEBUG:
+		print('[{}] [Main] > Decrypting message.'.format(
+			datetime.datetime.now()))
+	iv = ciphertext[:16]
+	obj = AES.new(sessionkey, AES.MODE_CFB, iv)
+	message = obj.decrypt(ciphertext)
+	message = message[16:]
+	if DEBUG:
+		print('[{}] [Main] > Decrypting signature.'.format(
+			datetime.datetime.now()))
+	# decryption signature
+	####################################################################################################
+	cipherrsa = PKCS1_OAEP.new(privatekeycli)
+	sig = cipherrsa.decrypt(signature[:256])
+	sig = sig + cipherrsa.decrypt(signature[256:])
+	if DEBUG:
+		print('[{}] [Main] > Signature verification.'.format(
+			datetime.datetime.now()))
+	# signature verification
 
-    verification = PKCS1_v1_5.new(
-        publickeysrv).verify(SHA256.new(message), sig)
-    ####################################################################################################
+	verification = PKCS1_v1_5.new(
+		publickeysrv).verify(SHA256.new(message), sig)
+	####################################################################################################
 
-    if verification == True:
-        if DEBUG:
-            print('[{}] [Main] > Signature succesefully verified.'.format(
-                datetime.datetime.now()))
-            print('[{}] [Main] > Message successefully decrypted for {} seconds'.format(
-                datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
-    else:
-        print('< SECURITY ALERT >')
-        print('[{}] [Main] > Error : Signature verification failure, your data not secure, please reconnect.'.format(
-            datetime.datetime.now()))
-    return message.decode('utf-8')
+	if verification == True:
+		if DEBUG:
+			print('[{}] [Main] > Signature succesefully verified.'.format(
+				datetime.datetime.now()))
+			print('[{}] [Main] > Message successefully decrypted for {} seconds'.format(
+				datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
+	else:
+		print('< SECURITY ALERT >')
+		print('[{}] [Main] > Error : Signature verification failure, your data not secure, please reconnect.'.format(
+			datetime.datetime.now()))
+	return message.decode('utf-8')
 
 
 
 
 @eel.expose
 def sendData(message):
-    try:
+	try:
 
-        global server
-        global publickeysrv
-        server.send(encrypt(
-            message.encode('utf-8'), publickeysrv))
+		global server
+		global publickeysrv
+		server.send(encrypt(
+			message.encode('utf-8'), publickeysrv))
 
-    except Exception as e:
+	except Exception as e:
 
-        #error_message 0009 Message sending failure
+		#error_message 0009 Message sending failure
 
-        stop(server)
+		stop(server)
 
 
 def listner(server):
+	try:
+		global SHUTDOWN
+		while not SHUTDOWN:
 
-    while not SHUTDOWN:
+			sockets_list = [sys.stdin, server]
 
-        sockets_list = [sys.stdin, server]
+			read_sockets, write_socket, error_socket = select.select(
+				sockets_list, [], [])
 
-        read_sockets, write_socket, error_socket = select.select(
-            sockets_list, [], [])
+			for socks in read_sockets:
 
-        for socks in read_sockets:
+				if socks == server:
 
-            if socks == server:
+					message = socks.recv(8192)
 
-                message = socks.recv(8192)
+					if message == b'':
 
-                if message == b'':
+						stop(server)
 
-                    stop(server)
+					else:
 
-                else:
+						print(decrypt(message, self.publickeysrv))
 
-                    print(decrypt(message, self.publickeysrv))
+	except Exception as e:
+		print('[{}] [Main] > Error : Unexpected error occured during authorization process : {}.'.format(
+			datetime.datetime.now(), e))
+		
+		stop(server)
 
+		SHUTDOWN = True
+
+	except KeyboardInterrupt:
+		print('[{}] [Main] > Closing...'.format(
+			datetime.datetime.now()))
+
+		stop(server)
+
+
+		SHUTDOWN = True
 
 def draw_ellipse(image, bounds, width=1, outline='white', antialias=4):
-    """Improved ellipse drawing function, based on PIL.ImageDraw."""
+	"""Improved ellipse drawing function, based on PIL.ImageDraw."""
 
-    # Use a single channel image (mode='L') as mask.
-    # The size of the mask can be increased relative to the imput image
-    # to get smoother looking results. 
-    mask = Image.new(
-        size=[int(dim * antialias) for dim in image.size],
-        mode='L', color='black')
-    draw = ImageDraw.Draw(mask)
+	# Use a single channel image (mode='L') as mask.
+	# The size of the mask can be increased relative to the imput image
+	# to get smoother looking results. 
+	mask = Image.new(
+		size=[int(dim * antialias) for dim in image.size],
+		mode='L', color='black')
+	draw = ImageDraw.Draw(mask)
 
-    # draw outer shape in white (color) and inner shape in black (transparent)
-    for offset, fill in (width/-2.0, 'gray'), (width/2.0, 'black'):
-        left, top = [(value + offset) * antialias for value in bounds[:2]]
-        right, bottom = [(value - offset) * antialias for value in bounds[2:]]
-        draw.ellipse([left, top, right, bottom], fill=fill)
+	# draw outer shape in white (color) and inner shape in black (transparent)
+	for offset, fill in (width/-2.0, 'gray'), (width/2.0, 'black'):
+		left, top = [(value + offset) * antialias for value in bounds[:2]]
+		right, bottom = [(value - offset) * antialias for value in bounds[2:]]
+		draw.ellipse([left, top, right, bottom], fill=fill)
 
-    # downsample the mask using PIL.Image.LANCZOS 
-    # (a high-quality downsampling filter).
-    mask = mask.resize(image.size, Image.LANCZOS)
-    # paste outline color to input image through the mask
-    image.paste(outline, mask=mask)
+	# downsample the mask using PIL.Image.LANCZOS 
+	# (a high-quality downsampling filter).
+	mask = mask.resize(image.size, Image.LANCZOS)
+	# paste outline color to input image through the mask
+	image.paste(outline, mask=mask)
 
 
 @eel.expose

@@ -2,6 +2,7 @@ import socket
 import sys
 import datetime
 import json
+import time
 from threading import Thread, Event
 from Cryptodome.Signature import PKCS1_v1_5
 from Cryptodome.Hash import SHA256
@@ -81,41 +82,42 @@ def decrypt(data, publickeycli, privatekeysrvpem):
     timedelta = datetime.datetime.now()
     print('[{}] [Main] > Parsing data.'.format(datetime.datetime.now()))
     payload = data.split(b'\x00\x01\x01\x00')
-    signature = payload[0]
-    ciphertext = payload[1]
-    sessionkey = payload[2]
-    # decryption session key
-    print('[{}] [Main] > Decrypting session key.'.format(datetime.datetime.now()))
-    cipherrsa = PKCS1_OAEP.new(privatekeysrv)
-    sessionkey = cipherrsa.decrypt(sessionkey)
-    # decryption message
-    print('[{}] [Main] > Decrypting message.'.format(datetime.datetime.now()))
-    iv = ciphertext[:16]
-    obj = AES.new(sessionkey, AES.MODE_CFB, iv)
-    message = obj.decrypt(ciphertext)
-    message = message[16:]
-    print('[{}] [Main] > Decrypting signature.'.format(datetime.datetime.now()))
-    # decryption signature
-    ####################################################################################################
-    cipherrsa = PKCS1_OAEP.new(privatekeysrv)
-    sig = cipherrsa.decrypt(signature[:256])
-    sig = sig + cipherrsa.decrypt(signature[256:])
-    print('[{}] [Main] > Signature verification.'.format(datetime.datetime.now()))
-    # signature verification
-
-    verification = PKCS1_v1_5.new(
-        publickeycli).verify(SHA256.new(message), sig)
-    ####################################################################################################
-
-    if verification == True:
-        print('[{}] [Main] > Signature succesefully verified.'.format(
-            datetime.datetime.now()))
-        print('[{}] [Main] > Message succesefully decrypted for {} seconds'.format(
-            datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
+    if len(payload) == 3:
+        signature = payload[0]
+        ciphertext = payload[1]
+        sessionkey = payload[2]
+        # decryption session key
+        print('[{}] [Main] > Decrypting session key.'.format(datetime.datetime.now()))
+        cipherrsa = PKCS1_OAEP.new(privatekeysrv)
+        sessionkey = cipherrsa.decrypt(sessionkey)
+        # decryption message
+        print('[{}] [Main] > Decrypting message.'.format(datetime.datetime.now()))
+        iv = ciphertext[:16]
+        obj = AES.new(sessionkey, AES.MODE_CFB, iv)
+        message = obj.decrypt(ciphertext)
+        message = message[16:]
+        print('[{}] [Main] > Decrypting signature.'.format(datetime.datetime.now()))
+        # decryption signature
+        ####################################################################################################
+        cipherrsa = PKCS1_OAEP.new(privatekeysrv)
+        sig = cipherrsa.decrypt(signature[:256])
+        sig = sig + cipherrsa.decrypt(signature[256:])
+        print('[{}] [Main] > Signature verification.'.format(datetime.datetime.now()))
+        # signature verification
+        verification = PKCS1_v1_5.new(
+            publickeycli).verify(SHA256.new(message), sig)
+        ####################################################################################################
+        if verification == True:
+            print('[{}] [Main] > Signature succesefully verified.'.format(
+                datetime.datetime.now()))
+            print('[{}] [Main] > Message succesefully decrypted for {} seconds'.format(
+                datetime.datetime.now(), (datetime.datetime.now() - timedelta).total_seconds()))
+        else:
+            print('[{}] [Main] > Error : Signature verification failure, your data not secure, please reconnect.'.format(
+                datetime.datetime.now()))
+        return message.decode('utf-8')
     else:
-        print('[{}] [Main] > Error : Signature verification failure, your data not secure, please reconnect.'.format(
-            datetime.datetime.now()))
-    return message.decode('utf-8')
+        return None
 
 
 def broadcast(message, connection, publickeycli, privatekeysrvpem):
@@ -158,14 +160,14 @@ class ClientThread(Thread):
 
             print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Sended public RSA key, waiting for client response.')
 
-            publickeyclipem = self.conn.recv(65536)  # 02 ##########
+            publickeyclipem = self.conn.recv(8192)  # 02 ##########
             self.publickeycli = RSA.importKey(publickeyclipem)
 
             CLIENTS_KEYS[self.conn] = self.publickeycli
 
             print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Client & Server public key keyexchanging successful.')
 
-            data = self.conn.recv(65536)  # 03 ##########
+            data = self.conn.recv(8192)  # 03 ##########
             data = json.loads(
                 decrypt(data, self.publickeycli, self.privatekeysrvpem))
 
@@ -327,7 +329,8 @@ class ClientThread(Thread):
 
         except KeyboardInterrupt:
 
-            del CLIENTS_KEYS[self.conn]
+            if self.conn in CLIENTS_KEYS:
+                del CLIENTS_KEYS[self.conn]
 
             print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Closing connection & thread activity...')
 
@@ -335,7 +338,8 @@ class ClientThread(Thread):
 
         except Exception as e:
 
-            del CLIENTS_KEYS[self.conn]
+            if self.conn in CLIENTS_KEYS:
+                del CLIENTS_KEYS[self.conn]
 
             print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Error : unexpected exception occured : {e}')
             print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Connection closed, stopping thread activity...')
@@ -351,43 +355,48 @@ class ClientThread(Thread):
         while not self.stopped():
 
             try:
-                message = self.conn.recv(65536)
+                starttime = time.time()
 
-                if message != b'':
+                while (time.time() - starttime) > 60:
+                    message = self.conn.recv(8192)
 
-                    message = decrypt(
+                    if message != b'':
+
+                        message = decrypt(
                         message, self.publickeycli, self.privatekeysrvpem)
+                        print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] {self.login} > {message}')
 
-                    print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] {self.login} > {message}')
+                        message_to_send = "< {} > {}".format(
+                            self.login, message).encode('utf-8')
+                        MESSAGES[str(datetime.datetime.now())
+                                ] = message_to_send.decode("utf-8")
 
-                    message_to_send = "< {} > {}".format(
-                        self.login, message).encode('utf-8')
-                    MESSAGES[str(datetime.datetime.now())
-                             ] = message_to_send.decode("utf-8")
+                        broadcast(message_to_send, self.conn,
+                                self.publickeycli, self.privatekeysrvpem)
 
-                    broadcast(message_to_send, self.conn,
-                              self.publickeycli, self.privatekeysrvpem)
+                    else:
 
-                elif decrypt(message, self.publickeycli, self.privatekeysrvpem) == '\n':
+                        message = f'---< {self.login} left the chat >---'.encode('utf-8')
+                        broadcast(message, self.conn, self.publickeycli,
+                                self.privatekeysrvpem)
 
+                        _remove(self.conn)
+
+                        if self.login in CLIENTS_USERS:
+                            del CLIENTS_USERS[self.login]
+                        if self.conn in CLIENTS_KEYS:
+                            del CLIENTS_KEYS[self.conn]
+
+                        print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Recieved null-byte, closing connection.')
+                        print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Connection closed, stopping thread activity...')
+
+                        self.stop()
+
+                if (time.time() - starttime) > 60:
+
+                    self.conn.send(b'')
                     continue
-
-                else:
-
-                    message = f'---< {self.login} left the chat >---'.encode('utf-8')
-                    broadcast(message, self.conn, self.publickeycli,
-                              self.privatekeysrvpem)
-
-                    _remove(self.conn)
-
-                    del CLIENTS_USERS[self.login]
-                    del CLIENTS_KEYS[self.conn]
-
-                    print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Recieved null-byte, closing connection.')
-                    print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Connection closed, stopping thread activity...')
-
-                    self.stop()
-
+                    
             except KeyboardInterrupt:
 
                 message = f'---< {self.login} left the chat >---'.encode('utf-8')
@@ -396,8 +405,10 @@ class ClientThread(Thread):
 
                 _remove(self.conn)
 
-                del CLIENTS_USERS[self.login]
-                del CLIENTS_KEYS[self.conn]
+                if self.login in CLIENTS_USERS:
+                    del CLIENTS_USERS[self.login]
+                if self.conn in CLIENTS_KEYS:
+                    del CLIENTS_KEYS[self.conn]
 
                 print(f'[{datetime.datetime.now()}] [{self.ip}:{self.port}] [{self.name}] > Closing connection & thread activity...')
 
@@ -409,8 +420,10 @@ class ClientThread(Thread):
                 broadcast(message, self.conn, self.publickeycli,
                           self.privatekeysrvpem)
 
-                del CLIENTS_USERS[self.login]
-                del CLIENTS_KEYS[self.conn]
+                if self.login in CLIENTS_USERS:
+                    del CLIENTS_USERS[self.login]
+                if self.conn in CLIENTS_KEYS:
+                    del CLIENTS_KEYS[self.conn]
 
                 _remove(self.conn)
 
@@ -612,19 +625,18 @@ def main():
 
                 MESSAGES[str(datetime.datetime.now())] = data.decode('utf-8')
 
-                server.sendall(encrypt(data, publickeycli, privatekeysrv))
-                # for _conn in CLIENTS:
-                #
-                #	try:
-                #
-                #		publickeycli = CLIENTS_KEYS[_conn]
-                #		_conn.send(encrypt(data, publickeycli, privatekeysrv))
-                #
-                #	except Exception as e:
-                #
-                #		print('[{}] [Server] [Broadcast] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), e))
-                #		_conn.close()
-                #		_remove(_conn)
+                for _conn in CLIENTS:
+                
+                	try:
+                
+                		publickeycli = CLIENTS_KEYS[_conn]
+                		_conn.send(encrypt(data, publickeycli, privatekeysrv))
+                
+                	except Exception as e:
+                
+                		print('[{}] [Server] [Broadcast] > Error : unexpected exception occured : {}'.format(datetime.datetime.now(), e))
+                		_conn.close()
+                		_remove(_conn)
 
         elif cmd.lower() == 'blocked':
 
@@ -698,6 +710,7 @@ if __name__ == "__main__":
         arg_payload = [publickeysrvpem, privatekeysrv]
 
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         print(f'[{datetime.datetime.now()}] [Server] [Main] > Binding server to {HOST}:{PORT}.')
