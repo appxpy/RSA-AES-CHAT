@@ -19,7 +19,7 @@ SHUTDOWN = False
 DEBUG = True
 
 
-HOST = '10.0.0.100'
+HOST = '178.140.207.179'
 PORT = 8008
 
 

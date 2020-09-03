@@ -11,8 +11,8 @@ from Cryptodome.Cipher import PKCS1_OAEP
 from Cryptodome.Cipher import AES
 from Cryptodome import Random
 
-HOST = '10.0.0.100'
-PORT = 8008
+HOST = '0.0.0.0'
+PORT = 8080
 
 global CLIENTS_KEYS
 global MESSAGES
