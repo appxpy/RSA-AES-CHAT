@@ -20,14 +20,14 @@ DEBUG = True
 
 
 HOST = '178.140.207.179'
-PORT = 8008
+PORT = 8080
 
 
 def stop(server):
     server.close()
 
 @eel.expose()
-def auth()
+def auth():
 
     try:
 
